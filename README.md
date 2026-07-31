@@ -30,8 +30,7 @@ The fans are exposed through Amazon's Alexa Smart Home service, so this integrat
 This integration is published for [HACS (Home Assistant Community Store)](https://hacs.xyz).
 
 1. Click the button below to add this repository to HACS:
-
-   [![Open HACS repository](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=d1vanloon&repository=home-assistant-vornado-transom)
+   [![Open HACS repository](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=d1vanloon&repository=home-assistant-vornado-transom&category=integration)
 
    Or add it manually in HACS → **Custom repositories** with URL `https://github.com/d1vanloon/home-assistant-vornado-transom` and category **Integration**.
 
