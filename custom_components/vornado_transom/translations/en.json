@@ -1,0 +1,42 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Service is already configured",
+      "reauth_successful": "Re-authentication was successful"
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "cannot_retrieve_data": "Unable to retrieve data from Amazon. Please try again later.",
+      "invalid_auth": "Invalid authentication"
+    },
+    "flow_title": "{username}",
+    "step": {
+      "reauth_confirm": {
+        "title": "Reauthenticate Vornado Transom",
+        "description": "Please re-enter your Amazon password and OTP code for {username}.",
+        "data": {
+          "code": "One-time password (OTP code)",
+          "password": "Password"
+        },
+        "data_description": {
+          "code": "The one-time password to log in to your account. Currently, only tokens from OTP applications are supported.",
+          "password": "The password of your Amazon account."
+        }
+      },
+      "user": {
+        "title": "Vornado Transom",
+        "description": "Sign in with your Amazon account to discover Vornado Transom fans.",
+        "data": {
+          "code": "One-time password (OTP code)",
+          "password": "Password",
+          "username": "Username"
+        },
+        "data_description": {
+          "code": "The one-time password to log in to your account. Currently, only tokens from OTP applications are supported.",
+          "password": "The password of your Amazon account.",
+          "username": "The email address of your Amazon account."
+        }
+      }
+    }
+  }
+}

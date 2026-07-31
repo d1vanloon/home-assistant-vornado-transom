@@ -1,0 +1,18 @@
+{
+  "domain": "vornado_transom",
+  "name": "Vornado Transom",
+  "codeowners": ["@d1vanloon"],
+  "config_flow": true,
+  "documentation": "https://github.com/d1vanloon/home-assistant-vornado-transom",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/d1vanloon/home-assistant-vornado-transom/issues",
+  "loggers": [
+    "custom_components.vornado_transom",
+    "aioamazondevices"
+  ],
+  "requirements": [
+    "aioamazondevices==14.2.2"
+  ],
+  "version": "0.1.0"
+}
