@@ -12,7 +12,7 @@
     "aioamazondevices"
   ],
   "requirements": [
-    "aioamazondevices>=14.2.2"
+    "aioamazondevices>=15.0.0"
   ],
   "version": "0.1.0"
 }

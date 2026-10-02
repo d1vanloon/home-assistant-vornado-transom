@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from http import HTTPMethod
+from pathlib import Path
 from typing import Any
 
 from aioamazondevices.const.http import URI_NEXUS_GRAPHQL
 from aioamazondevices.exceptions import CannotAuthenticate, CannotConnect, CannotRetrieveData
-from aioamazondevices.http_wrapper import AmazonSessionStateData
+from aioamazondevices.http_wrapper import AmazonHttpWrapper, AmazonSessionStateData
 from aioamazondevices.login import AmazonLogin
+from aioamazondevices.structures import AmazonSaveDataConfig
 from aiohttp import ClientSession
 from yarl import URL
 
-from .library import amazon_http_wrapper
 from .models import AlexaApiError, CapabilityState
 from .queries import (
     MUTATION_SET_ENDPOINT_FEATURES,
@@ -37,7 +38,11 @@ class AlexaSmartHomeClient:
         self._session_state = AmazonSessionStateData(
             site, username, password, login_data
         )
-        self._http = amazon_http_wrapper(session, self._session_state, storage_path)
+        self._http = AmazonHttpWrapper(
+            session,
+            self._session_state,
+            save_data=AmazonSaveDataConfig(path=Path(storage_path)),
+        )
         self._login = AmazonLogin(
             http_wrapper=self._http,
             session_state_data=self._session_state,

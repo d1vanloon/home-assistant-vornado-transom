@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
+from aioamazondevices.api import AmazonEchoApi
 from aioamazondevices.exceptions import (
     CannotAuthenticate,
     CannotConnect,
     CannotRetrieveData,
 )
+from aioamazondevices.structures import AmazonSaveDataConfig
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
@@ -18,7 +21,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import aiohttp_client
 import homeassistant.helpers.config_validation as cv
 
-from .alexa.library import amazon_echo_api
 from .const import CONF_LOGIN_DATA, DOMAIN
 
 STEP_REAUTH_DATA_SCHEMA = vol.Schema(
@@ -32,11 +34,11 @@ STEP_REAUTH_DATA_SCHEMA = vol.Schema(
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
     session = aiohttp_client.async_create_clientsession(hass)
-    api = amazon_echo_api(
+    api = AmazonEchoApi(
         session,
         data[CONF_USERNAME],
         data[CONF_PASSWORD],
-        hass.config.path(DOMAIN),
+        save_data=AmazonSaveDataConfig(path=Path(hass.config.path(DOMAIN))),
     )
     return await api.login.login_mode_interactive(data[CONF_CODE])
 
