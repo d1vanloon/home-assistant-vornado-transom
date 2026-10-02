@@ -9,6 +9,7 @@ from aioamazondevices.const.http import URI_NEXUS_GRAPHQL
 from aioamazondevices.exceptions import CannotAuthenticate, CannotConnect, CannotRetrieveData
 from aioamazondevices.http_wrapper import AmazonHttpWrapper, AmazonSessionStateData
 from aioamazondevices.login import AmazonLogin
+from aioamazondevices.structures import AmazonSaveDataConfig
 from aiohttp import ClientSession
 from yarl import URL
 
@@ -29,13 +30,18 @@ class AlexaSmartHomeClient:
         username: str,
         password: str,
         login_data: dict[str, Any],
+        save_data: AmazonSaveDataConfig,
     ) -> None:
         """Initialize the client with stored Amazon login data."""
         site = login_data.get("site", "https://www.amazon.com")
         self._session_state = AmazonSessionStateData(
             site, username, password, login_data
         )
-        self._http = AmazonHttpWrapper(session, self._session_state)
+        self._http = AmazonHttpWrapper(
+            session,
+            self._session_state,
+            save_data=save_data,
+        )
         self._login = AmazonLogin(
             http_wrapper=self._http,
             session_state_data=self._session_state,

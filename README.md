@@ -18,7 +18,7 @@ The fans are exposed through Amazon's Alexa Smart Home service, so this integrat
 
 ## Prerequisites
 
-- A Home Assistant installation (2024.8.0 or newer).
+- A Home Assistant installation (2026.9.0 or newer).
 - A Vornado Transom fan set up and linked to your Amazon account via the Alexa app.
 - Your Amazon account email and password.
 - A one-time password (OTP) from a TOTP authenticator app. Currently only OTP-application codes are supported — SMS/email codes are not.

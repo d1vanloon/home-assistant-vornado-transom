@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from aioamazondevices.exceptions import (
@@ -9,6 +10,7 @@ from aioamazondevices.exceptions import (
     CannotConnect,
     CannotRetrieveData,
 )
+from aioamazondevices.structures import AmazonSaveDataConfig
 from aiohttp import ClientSession
 
 from homeassistant.config_entries import ConfigEntry
@@ -55,6 +57,9 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
             entry.data[CONF_USERNAME],
             entry.data[CONF_PASSWORD],
             entry.data[CONF_LOGIN_DATA],
+            save_data=AmazonSaveDataConfig(
+                path=Path(hass.config.path(DOMAIN)),
+            ),
         )
         self._controls_by_key: dict[str, FanDevice] = {}
 
