@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from http import HTTPMethod
-from pathlib import Path
 from typing import Any
 
 from aioamazondevices.const.http import URI_NEXUS_GRAPHQL
@@ -31,7 +30,7 @@ class AlexaSmartHomeClient:
         username: str,
         password: str,
         login_data: dict[str, Any],
-        storage_path: str,
+        save_data: AmazonSaveDataConfig,
     ) -> None:
         """Initialize the client with stored Amazon login data."""
         site = login_data.get("site", "https://www.amazon.com")
@@ -41,7 +40,7 @@ class AlexaSmartHomeClient:
         self._http = AmazonHttpWrapper(
             session,
             self._session_state,
-            save_data=AmazonSaveDataConfig(path=Path(storage_path)),
+            save_data=save_data,
         )
         self._login = AmazonLogin(
             http_wrapper=self._http,
