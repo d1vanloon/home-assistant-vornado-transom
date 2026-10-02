@@ -55,6 +55,7 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
             entry.data[CONF_USERNAME],
             entry.data[CONF_PASSWORD],
             entry.data[CONF_LOGIN_DATA],
+            storage_path=hass.config.path(DOMAIN),
         )
         self._controls_by_key: dict[str, FanDevice] = {}
 
