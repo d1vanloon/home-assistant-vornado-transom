@@ -17,6 +17,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .coordinator import VornadoTransomConfigEntry, VornadoTransomCoordinator
 from .entity import VornadoTransomEntity
 
+_DIRECTION_UNSUPPORTED = "This fan does not support airflow direction"
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -34,12 +36,6 @@ class VornadoTransomFan(VornadoTransomEntity, FanEntity):
     """Representation of a Vornado Transom fan."""
 
     _attr_name = None
-    _attr_supported_features = (
-        FanEntityFeature.TURN_ON
-        | FanEntityFeature.TURN_OFF
-        | FanEntityFeature.PRESET_MODE
-        | FanEntityFeature.DIRECTION
-    )
 
     def __init__(
         self, coordinator: VornadoTransomCoordinator, appliance_key: str
@@ -50,6 +46,18 @@ class VornadoTransomFan(VornadoTransomEntity, FanEntity):
         self._attr_preset_modes = [
             mode.label for mode in self.device.controls.speed_modes
         ]
+
+    @property
+    def supported_features(self) -> FanEntityFeature:
+        """Return features supported by this fan."""
+        features = (
+            FanEntityFeature.TURN_ON
+            | FanEntityFeature.TURN_OFF
+            | FanEntityFeature.PRESET_MODE
+        )
+        if self.device.controls.direction is not None:
+            features |= FanEntityFeature.DIRECTION
+        return features
 
     @property
     def is_on(self) -> bool | None:
@@ -71,12 +79,15 @@ class VornadoTransomFan(VornadoTransomEntity, FanEntity):
     @property
     def current_direction(self) -> str | None:
         """Return the current airflow direction."""
+        direction = self.device.controls.direction
+        if direction is None:
+            raise HomeAssistantError(_DIRECTION_UNSUPPORTED)
         direction_mode = self.device.direction_mode
         if not direction_mode:
             return None
-        if direction_mode == self.device.controls.direct_mode.alexa_mode:
+        if direction_mode == direction.direct_mode.alexa_mode:
             return DIRECTION_FORWARD
-        if direction_mode == self.device.controls.exhaust_mode.alexa_mode:
+        if direction_mode == direction.exhaust_mode.alexa_mode:
             return DIRECTION_REVERSE
         return None
 
@@ -117,10 +128,13 @@ class VornadoTransomFan(VornadoTransomEntity, FanEntity):
 
     async def async_set_direction(self, direction: str) -> None:
         """Set the airflow direction."""
+        controls = self.device.controls.direction
+        if controls is None:
+            raise HomeAssistantError(_DIRECTION_UNSUPPORTED)
         if direction == DIRECTION_FORWARD:
-            alexa_mode = self.device.controls.direct_mode.alexa_mode
+            alexa_mode = controls.direct_mode.alexa_mode
         elif direction == DIRECTION_REVERSE:
-            alexa_mode = self.device.controls.exhaust_mode.alexa_mode
+            alexa_mode = controls.exhaust_mode.alexa_mode
         else:
             raise HomeAssistantError(f"Invalid direction: {direction}")
         await self.coordinator.async_set_direction_mode(
