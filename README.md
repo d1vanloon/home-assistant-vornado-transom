@@ -1,25 +1,25 @@
 # Vornado Transom
 
-A custom [Home Assistant](https://www.home-assistant.io/) integration that lets you discover and control **Vornado Transom** fans registered to your Amazon account.
+A custom [Home Assistant](https://www.home-assistant.io/) integration that lets you discover and control **Alexa-enabled Vornado fans** registered to your Amazon account. It was written for the Vornado Transom and also works with other Vornado-style fans that expose a 4-speed ModeController.
 
-The fans are exposed through Amazon's Alexa Smart Home service, so this integration signs in with your Amazon credentials and surfaces each discovered fan as a `fan` entity supporting power, speed presets, and airflow direction.
+The fans are exposed through Amazon's Alexa Smart Home service, so this integration signs in with your Amazon credentials and surfaces each discovered fan as a `fan` entity. Power and speed presets work for any matching 4-speed controller. Airflow direction is available when the fan also exposes the Transom-style 2-mode Direct/Exhaust controller.
 
 > **Disclaimer:** This is an unofficial, community integration. It is not affiliated with or endorsed by Vornado or Amazon. It relies on the same unofficial Alexa APIs used by the [`aioamazondevices`](https://pypi.org/project/aioamazondevices/) library, which may break without notice if Amazon changes their API.
 
 ## Features
 
-- Discovers all Vornado Transom fans linked to your Amazon account.
+- Discovers Alexa-enabled Vornado-style fans that expose a 4-speed ModeController, including the Transom.
 - One `fan` entity per fan, with:
   - **Power** on/off.
   - **Preset modes** for the fan's speed levels (discovered automatically per device).
-  - **Direction** control — `forward` (direct airflow) and `reverse` (exhaust).
+  - **Direction** control — `forward` (direct airflow) and `reverse` (exhaust) — when a Transom-style 2-mode Direct/Exhaust controller is present.
 - Automatic re-authentication flow when your Amazon session expires.
 - Polls the cloud every 60 seconds for state updates.
 
 ## Prerequisites
 
 - A Home Assistant installation (2026.9.0 or newer).
-- A Vornado Transom fan set up and linked to your Amazon account via the Alexa app.
+- An Alexa-enabled Vornado-style fan with a 4-speed ModeController (such as a Transom, OSCR37, or Atom 2), set up and linked to your Amazon account via the Alexa app. Direction is available on fans that also expose the Transom-style 2-mode Direct/Exhaust controller.
 - Your Amazon account email and password.
 - A one-time password (OTP) from a TOTP authenticator app. Currently only OTP-application codes are supported — SMS/email codes are not.
 

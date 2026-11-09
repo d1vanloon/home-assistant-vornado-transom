@@ -24,14 +24,21 @@ class ModeBinding:
 
 
 @dataclass(frozen=True)
+class DirectionControls:
+    """Transom-style Direct/Exhaust direction controller."""
+
+    instance: str
+    direct_mode: ModeBinding
+    exhaust_mode: ModeBinding
+
+
+@dataclass(frozen=True)
 class FanControlMap:
-    """Discovered speed and direction ModeController bindings."""
+    """Discovered speed modes and an optional direction controller."""
 
     speed_instance: str
     speed_modes: tuple[ModeBinding, ...]
-    direction_instance: str
-    direct_mode: ModeBinding
-    exhaust_mode: ModeBinding
+    direction: DirectionControls | None = None
 
 
 @dataclass

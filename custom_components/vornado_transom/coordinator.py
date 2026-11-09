@@ -133,6 +133,7 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
         power = device.power
         speed_mode = device.speed_mode
         direction_mode = device.direction_mode
+        direction = device.controls.direction
 
         for state in states:
             if state.name == "power" and state.power_state is not None:
@@ -144,8 +145,9 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
             ):
                 speed_mode = state.mode_value
             elif (
-                state.name == "mode"
-                and state.instance == device.controls.direction_instance
+                direction is not None
+                and state.name == "mode"
+                and state.instance == direction.instance
                 and state.mode_value is not None
             ):
                 direction_mode = state.mode_value
@@ -243,9 +245,12 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
     ) -> None:
         """Set direction mode and optimistically update coordinator data."""
         device = self._require_device(appliance_key)
+        direction = device.controls.direction
+        if direction is None:
+            raise HomeAssistantError("This fan does not support airflow direction")
         try:
             await self.client.async_set_mode(
-                device.endpoint_id, device.controls.direction_instance, alexa_mode
+                device.endpoint_id, direction.instance, alexa_mode
             )
         except AlexaApiError as err:
             raise HomeAssistantError(str(err)) from err

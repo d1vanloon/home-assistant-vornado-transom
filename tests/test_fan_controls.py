@@ -106,15 +106,41 @@ def _direction_capability() -> dict:
     }
 
 
-def _capabilities(*, speed_modes: int = 4) -> list[dict]:
-    return [
+def _position_capability(*, mode_count: int = 8) -> dict:
+    """Atom 2-style oscillation positions named Direction/Position."""
+    return {
+        "interfaceName": "Alexa.ModeController",
+        "instance": "3",
+        "properties": {"readOnly": False},
+        "resources": {
+            "friendlyNames": [
+                {"@type": "text", "value": {"text": "Direction"}},
+                {"@type": "text", "value": {"text": "Position"}},
+            ]
+        },
+        "configuration": {
+            "ordered": True,
+            "supportedModes": [
+                _mode(f"Position.{index}", f"Position {index}")
+                for index in range(1, mode_count + 1)
+            ],
+        },
+    }
+
+
+def _capabilities(
+    *, speed_modes: int = 4, include_direction: bool = True
+) -> list[dict]:
+    capabilities = [
         {
             "interfaceName": "Alexa.PowerController",
             "properties": {"readOnly": False},
         },
         _speed_capability(mode_count=speed_modes),
-        _direction_capability(),
     ]
+    if include_direction:
+        capabilities.append(_direction_capability())
+    return capabilities
 
 
 def test_discover_vornado_controls_maps_speed_and_direction() -> None:
@@ -122,7 +148,6 @@ def test_discover_vornado_controls_maps_speed_and_direction() -> None:
     controls = discover_vornado_controls(_capabilities())
     assert controls is not None
     assert controls.speed_instance == "1"
-    assert controls.direction_instance == "2"
     assert [mode.label for mode in controls.speed_modes] == [
         "Low",
         "Medium",
@@ -135,10 +160,42 @@ def test_discover_vornado_controls_maps_speed_and_direction() -> None:
         "Speed.High",
         "Speed.Turbo",
     ]
-    assert controls.direct_mode.alexa_mode == "Direction.Direct"
-    assert controls.direct_mode.label == "Direct"
-    assert controls.exhaust_mode.alexa_mode == "Direction.Exhaust"
-    assert controls.exhaust_mode.label == "Exhaust"
+    assert controls.direction is not None
+    assert controls.direction.instance == "2"
+    assert controls.direction.direct_mode.alexa_mode == "Direction.Direct"
+    assert controls.direction.direct_mode.label == "Direct"
+    assert controls.direction.exhaust_mode.alexa_mode == "Direction.Exhaust"
+    assert controls.direction.exhaust_mode.label == "Exhaust"
+
+
+def test_discover_speed_only_fan_has_no_direction() -> None:
+    """A 4-speed fan with no direction controller is still discovered."""
+    controls = discover_vornado_controls(_capabilities(include_direction=False))
+    assert controls is not None
+    assert controls.speed_instance == "1"
+    assert [mode.label for mode in controls.speed_modes] == [
+        "Low",
+        "Medium",
+        "High",
+        "Turbo",
+    ]
+    assert controls.direction is None
+
+
+def test_discover_eight_mode_position_controller_is_not_direction() -> None:
+    """An 8-mode Direction/Position controller stays off airflow direction."""
+    capabilities = _capabilities(include_direction=False)
+    capabilities.append(_position_capability())
+    controls = discover_vornado_controls(capabilities)
+    assert controls is not None
+    assert controls.speed_instance == "1"
+    assert [mode.label for mode in controls.speed_modes] == [
+        "Low",
+        "Medium",
+        "High",
+        "Turbo",
+    ]
+    assert controls.direction is None
 
 
 def test_discover_rejects_three_mode_speed_controller() -> None:
@@ -151,3 +208,5 @@ def test_discover_accepts_capabilities_json_string() -> None:
     controls = discover_vornado_controls(json.dumps(_capabilities()))
     assert controls is not None
     assert controls.speed_modes[0].label == "Low"
+    assert controls.direction is not None
+    assert controls.direction.instance == "2"

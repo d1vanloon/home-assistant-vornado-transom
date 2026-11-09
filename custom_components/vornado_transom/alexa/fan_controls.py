@@ -1,4 +1,4 @@
-"""Discover Vornado Transom ModeController fan bindings."""
+"""Discover Vornado fan ModeController bindings."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any
 
-from .models import FanControlMap, ModeBinding
+from .models import DirectionControls, FanControlMap, ModeBinding
 
 SPEED_FALLBACK_LABELS = ("Low", "Medium", "High", "Turbo")
 DIRECTION_FALLBACK_LABELS = ("Direct", "Exhaust")
@@ -178,7 +178,12 @@ def parse_capabilities(raw: Any) -> list[dict[str, Any]] | None:
 
 
 def discover_vornado_controls(capabilities: Any) -> FanControlMap | None:
-    """Discover Transom-like fans that expose both speed and direction modes."""
+    """Discover fans that expose a 4-speed ModeController.
+
+    Direction is attached only for a Transom-style 2-mode Direct/Exhaust
+    controller. Fans with no direction controller, or with a differently
+    shaped one, are still returned as speed-only maps.
+    """
     parsed = (
         capabilities
         if isinstance(capabilities, list)
@@ -189,19 +194,25 @@ def discover_vornado_controls(capabilities: Any) -> FanControlMap | None:
         return None
 
     speed_cap = next((cap for cap in parsed if match_mode_speed(cap)), None)
-    direction_cap = next((cap for cap in parsed if match_mode_direction(cap)), None)
-    if speed_cap is None or direction_cap is None:
+    if speed_cap is None:
         return None
 
     speed_modes = _build_speed_modes(speed_cap)
     if len(speed_modes) != 4:
         return None
-    direct_mode, exhaust_mode = _build_direction_modes(direction_cap)
+
+    direction: DirectionControls | None = None
+    direction_cap = next((cap for cap in parsed if match_mode_direction(cap)), None)
+    if direction_cap is not None:
+        direct_mode, exhaust_mode = _build_direction_modes(direction_cap)
+        direction = DirectionControls(
+            instance=str(direction_cap["instance"]),
+            direct_mode=direct_mode,
+            exhaust_mode=exhaust_mode,
+        )
 
     return FanControlMap(
         speed_instance=str(speed_cap["instance"]),
         speed_modes=speed_modes,
-        direction_instance=str(direction_cap["instance"]),
-        direct_mode=direct_mode,
-        exhaust_mode=exhaust_mode,
+        direction=direction,
     )
