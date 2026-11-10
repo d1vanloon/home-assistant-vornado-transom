@@ -22,11 +22,18 @@ def normalize_fan_label(input_value: str) -> str:
     ).strip()
 
 
-def _friendly_names(capability: dict[str, Any]) -> list[str]:
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def friendly_names(capability: dict[str, Any]) -> list[str]:
     """Extract normalized friendly names from a capability."""
     names: list[str] = []
-    for friendly in capability.get("resources", {}).get("friendlyNames", []) or []:
-        value = friendly.get("value") or {}
+    resources = _as_dict(capability.get("resources"))
+    for friendly in resources.get("friendlyNames") or []:
+        if not isinstance(friendly, dict):
+            continue
+        value = _as_dict(friendly.get("value"))
         text = value.get("text")
         if text:
             names.append(normalize_fan_label(text))
@@ -42,7 +49,7 @@ def _has_friendly_name(capability: dict[str, Any], keywords: tuple[str, ...]) ->
     normalized_keywords = tuple(normalize_fan_label(keyword) for keyword in keywords)
     return any(
         any(keyword in name for keyword in normalized_keywords)
-        for name in _friendly_names(capability)
+        for name in friendly_names(capability)
     )
 
 
@@ -51,7 +58,7 @@ def _is_mode_controller(capability: dict[str, Any]) -> bool:
 
 
 def _is_not_read_only(capability: dict[str, Any]) -> bool:
-    return (capability.get("properties") or {}).get("readOnly") is not True
+    return _as_dict(capability.get("properties")).get("readOnly") is not True
 
 
 def _has_instance(capability: dict[str, Any]) -> bool:
@@ -60,7 +67,7 @@ def _has_instance(capability: dict[str, Any]) -> bool:
 
 def match_mode_speed(capability: dict[str, Any]) -> bool:
     """Match a Vornado Transom speed ModeController."""
-    configuration = capability.get("configuration") or {}
+    configuration = _as_dict(capability.get("configuration"))
     supported_modes = configuration.get("supportedModes") or []
     return (
         _is_mode_controller(capability)
@@ -74,7 +81,7 @@ def match_mode_speed(capability: dict[str, Any]) -> bool:
 
 def match_mode_direction(capability: dict[str, Any]) -> bool:
     """Match a Vornado Transom direction ModeController."""
-    configuration = capability.get("configuration") or {}
+    configuration = _as_dict(capability.get("configuration"))
     supported_modes = configuration.get("supportedModes") or []
     return (
         _is_mode_controller(capability)
@@ -108,36 +115,51 @@ def _label_from_mode(
     return str(mode.get("value") or f"Mode{index + 1}")
 
 
+def _alexa_mode(mode: Any) -> str | None:
+    if not isinstance(mode, dict) or mode.get("value") is None:
+        return None
+    return str(mode["value"])
+
+
 def _build_speed_modes(capability: dict[str, Any]) -> tuple[ModeBinding, ...]:
     instance = str(capability["instance"])
-    modes = (capability.get("configuration") or {}).get("supportedModes") or []
-    return tuple(
-        ModeBinding(
-            instance=instance,
-            alexa_mode=str(mode["value"]),
-            label=_label_from_mode(
-                mode, index=index, fallbacks=SPEED_FALLBACK_LABELS
-            ),
+    modes = _as_dict(capability.get("configuration")).get("supportedModes") or []
+    bindings: list[ModeBinding] = []
+    for index, mode in enumerate(modes):
+        alexa_mode = _alexa_mode(mode)
+        if alexa_mode is None:
+            return ()
+        bindings.append(
+            ModeBinding(
+                instance=instance,
+                alexa_mode=alexa_mode,
+                label=_label_from_mode(
+                    mode, index=index, fallbacks=SPEED_FALLBACK_LABELS
+                ),
+            )
         )
-        for index, mode in enumerate(modes)
-    )
+    return tuple(bindings)
 
 
 def _build_direction_modes(
     capability: dict[str, Any],
-) -> tuple[ModeBinding, ModeBinding]:
+) -> tuple[ModeBinding, ModeBinding] | None:
     instance = str(capability["instance"])
-    modes = (capability.get("configuration") or {}).get("supportedModes") or []
-    bindings = [
-        ModeBinding(
-            instance=instance,
-            alexa_mode=str(mode["value"]),
-            label=_label_from_mode(
-                mode, index=index, fallbacks=DIRECTION_FALLBACK_LABELS
-            ),
+    modes = _as_dict(capability.get("configuration")).get("supportedModes") or []
+    bindings: list[ModeBinding] = []
+    for index, mode in enumerate(modes):
+        alexa_mode = _alexa_mode(mode)
+        if alexa_mode is None:
+            return None
+        bindings.append(
+            ModeBinding(
+                instance=instance,
+                alexa_mode=alexa_mode,
+                label=_label_from_mode(
+                    mode, index=index, fallbacks=DIRECTION_FALLBACK_LABELS
+                ),
+            )
         )
-        for index, mode in enumerate(modes)
-    ]
 
     direct = next(
         (
@@ -204,12 +226,14 @@ def discover_vornado_controls(capabilities: Any) -> FanControlMap | None:
     direction: DirectionControls | None = None
     direction_cap = next((cap for cap in parsed if match_mode_direction(cap)), None)
     if direction_cap is not None:
-        direct_mode, exhaust_mode = _build_direction_modes(direction_cap)
-        direction = DirectionControls(
-            instance=str(direction_cap["instance"]),
-            direct_mode=direct_mode,
-            exhaust_mode=exhaust_mode,
-        )
+        built = _build_direction_modes(direction_cap)
+        if built is not None:
+            direct_mode, exhaust_mode = built
+            direction = DirectionControls(
+                instance=str(direction_cap["instance"]),
+                direct_mode=direct_mode,
+                exhaust_mode=exhaust_mode,
+            )
 
     return FanControlMap(
         speed_instance=str(speed_cap["instance"]),

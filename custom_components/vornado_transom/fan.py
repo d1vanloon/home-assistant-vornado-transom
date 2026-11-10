@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .alexa.endpoints import entity_contract
 from .coordinator import VornadoTransomConfigEntry, VornadoTransomCoordinator
 from .entity import VornadoTransomEntity
 
@@ -42,10 +43,9 @@ class VornadoTransomFan(VornadoTransomEntity, FanEntity):
     ) -> None:
         """Initialize the fan entity."""
         super().__init__(coordinator, appliance_key)
-        self._attr_unique_id = f"{appliance_key}_fan"
-        self._attr_preset_modes = [
-            mode.label for mode in self.device.controls.speed_modes
-        ]
+        contract = entity_contract(self.device)
+        self._attr_unique_id = contract.unique_id
+        self._attr_preset_modes = list(contract.preset_modes)
 
     @property
     def supported_features(self) -> FanEntityFeature:
