@@ -65,6 +65,10 @@ If your Amazon session expires later, Home Assistant will prompt you to re-authe
       aioamazondevices: debug
   ```
 
+## Alexa capability record
+
+[Transom on Alexa](docs/transom-alexa.md) records the controllers one Vornado Transom exposes, and which of them this integration binds. The fixture at `tests/fixtures/transom_alexa.json` has placeholders in place of names, serial numbers, and endpoint ids.
+
 ## Contributing
 
 Issues and pull requests are welcome at the [issue tracker](https://github.com/d1vanloon/home-assistant-vornado-transom/issues).

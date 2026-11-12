@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 from alexa_payloads import capabilities, endpoint, mode, speed_capability
 
-from tools.vornado_probe.loader import load
+from load_component import load
 
 endpoints = load("alexa.endpoints")
 models = load("alexa.models")
@@ -145,3 +148,25 @@ def test_entity_contract_falls_back_to_vornado_transom() -> None:
     assert contract.direction_modes == endpoints.DirectionModes(
         "Direction.Direct", "Direction.Exhaust"
     )
+
+
+def test_recorded_transom_matches_live_bindings() -> None:
+    fixture = json.loads(
+        (Path(__file__).parent / "fixtures" / "transom_alexa.json").read_text(encoding="utf-8")
+    )
+    verdict = endpoints.classify_endpoint(fixture["endpoint"])
+    assert isinstance(verdict, Admitted)
+    controls = verdict.device.controls
+    assert [binding.alexa_mode for binding in controls.speed_modes] == ["1", "2", "3", "4"]
+    assert [binding.label for binding in controls.speed_modes] == [
+        "Low",
+        "Medium",
+        "High",
+        "Turbo",
+    ]
+    assert controls.direction is not None
+    assert controls.direction.instance == "2"
+    assert controls.direction.direct_mode.alexa_mode == "2"
+    assert controls.direction.direct_mode.label == "Direct"
+    assert controls.direction.exhaust_mode.alexa_mode == "1"
+    assert controls.direction.exhaust_mode.label == "Exhaust"

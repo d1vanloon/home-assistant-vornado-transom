@@ -6,7 +6,7 @@ import json
 
 from alexa_payloads import capabilities, oscillation_position_capability
 
-from tools.vornado_probe.loader import load
+from load_component import load
 
 discover_vornado_controls = load("alexa.fan_controls").discover_vornado_controls
 
