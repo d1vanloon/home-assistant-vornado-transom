@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from typing import Any
 
@@ -122,7 +123,13 @@ def _temperature_range(capability: dict[str, Any]) -> TemperatureRange | None:
         precision = float(supported["precision"])
     except (KeyError, TypeError, ValueError):
         return None
-    if not (minimum < maximum and precision > 0):
+    if not (
+        math.isfinite(minimum)
+        and math.isfinite(maximum)
+        and math.isfinite(precision)
+        and minimum < maximum
+        and precision > 0
+    ):
         return None
     return TemperatureRange(minimum, maximum, precision)
 

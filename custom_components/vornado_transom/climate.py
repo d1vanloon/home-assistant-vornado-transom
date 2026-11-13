@@ -9,7 +9,7 @@ from homeassistant.components.climate import (
     ClimateEntityFeature,
     HVACMode,
 )
-from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
+from homeassistant.const import ATTR_HVAC_MODE, ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -140,8 +140,10 @@ class VornadoTransomClimate(VornadoTransomEntity, ClimateEntity):
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             raise HomeAssistantError("No temperature provided")
+        mode = kwargs.get(ATTR_HVAC_MODE)
         await self.coordinator.async_command(
-            self._appliance_key, SetTargetTemperature(temperature)
+            self._appliance_key,
+            SetTargetTemperature(temperature, None if mode is None else str(mode)),
         )
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
