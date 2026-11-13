@@ -274,6 +274,38 @@ def test_apply_fan_state_folds_auto_setpoint_and_sentinels() -> None:
     assert cleared.air_temperature == 0.0
 
 
+def test_climate_card_has_a_target_when_the_device_setpoint_is_unset() -> None:
+    """The climate card draws a setpoint only when temperature is a number."""
+    device = endpoints.apply_fan_state(
+        _recorded(),
+        [CapabilityState(name="range", instance="3", range_value=0.0)],
+    )
+    assert device.target_temperature is None
+    assert endpoints.climate_target_temperature(device) == 60.0
+
+
+def test_climate_card_uses_a_reported_setpoint() -> None:
+    device = endpoints.apply_fan_state(
+        _recorded(),
+        [CapabilityState(name="range", instance="3", range_value=72.0)],
+    )
+    assert endpoints.climate_target_temperature(device) == 72.0
+
+
+def test_climate_swing_mode_is_forward_or_reverse() -> None:
+    direct = endpoints.apply_fan_state(
+        _recorded(),
+        [CapabilityState(name="mode", instance="2", mode_value="2")],
+    )
+    exhaust = endpoints.apply_fan_state(
+        _recorded(),
+        [CapabilityState(name="mode", instance="2", mode_value="1")],
+    )
+    assert endpoints.climate_swing_mode(direct) == "forward"
+    assert endpoints.climate_swing_mode(exhaust) == "reverse"
+    assert endpoints.climate_swing_mode(_recorded()) is None
+
+
 def test_synthetic_fan_without_climate_controllers_has_no_auto_climate() -> None:
     """Climate features on a speed-only fan do not create auto state."""
     device = _template()
