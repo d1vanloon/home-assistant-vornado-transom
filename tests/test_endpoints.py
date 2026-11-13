@@ -274,6 +274,22 @@ def test_apply_fan_state_folds_auto_setpoint_and_sentinels() -> None:
     assert cleared.air_temperature == 0.0
 
 
+def test_unavailable_keeps_the_last_climate_reading() -> None:
+    """A failed poll must not forget auto or the setpoint."""
+    device = endpoints.apply_fan_state(
+        _recorded(),
+        [
+            CapabilityState(name="toggle", instance="4", toggle_enabled=True),
+            CapabilityState(name="range", instance="3", range_value=72.0),
+        ],
+    )
+    stale = endpoints.mark_unavailable(device)
+    assert stale.available is False
+    assert stale.auto_on is True
+    assert stale.target_temperature == 72.0
+    assert stale.endpoint_id == device.endpoint_id
+
+
 def test_climate_card_has_a_target_when_the_device_setpoint_is_unset() -> None:
     """The climate card draws a setpoint only when temperature is a number."""
     device = endpoints.apply_fan_state(

@@ -20,20 +20,16 @@ from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .alexa.client import AlexaSmartHomeClient
-from .alexa.commands import (
-    CommandRejected,
-    Intent,
-    expected_states,
-    feature_request,
-    plan,
-)
+from .alexa.commands import CommandRejected, FeatureWrite, Intent, feature_request
 from .alexa.endpoints import (
     Gate,
     Rejected,
     apply_fan_state,
     classify_endpoint,
     kept_devices,
+    mark_unavailable,
 )
+from .alexa.execution import FanCommandLane
 from .alexa.models import AlexaApiError, FanDevice
 from .const import CONF_LOGIN_DATA, DOMAIN, LOGGER, SCAN_INTERVAL
 
@@ -72,6 +68,7 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
             ),
         )
         self._controls_by_key: dict[str, FanDevice] = {}
+        self._lanes: dict[str, FanCommandLane] = {}
 
     async def _async_update_data(self) -> dict[str, FanDevice]:
         """Discover (once) and poll fan state."""
@@ -103,19 +100,7 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
                     LOGGER.warning(
                         "Failed to refresh fan %s: %s", template.name, err
                     )
-                    devices[key] = FanDevice(
-                        endpoint_id=template.endpoint_id,
-                        appliance_key=template.appliance_key,
-                        name=template.name,
-                        serial_number=template.serial_number,
-                        model=template.model,
-                        manufacturer=template.manufacturer,
-                        controls=template.controls,
-                        power=template.power,
-                        speed_mode=template.speed_mode,
-                        direction_mode=template.direction_mode,
-                        available=False,
-                    )
+                    devices[key] = mark_unavailable(self._cached_device(key) or template)
             return devices
         except CannotAuthenticate as err:
             raise ConfigEntryAuthFailed(
@@ -134,23 +119,53 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
             raise HomeAssistantError(f"Unknown fan device: {appliance_key}")
         return self.data[appliance_key]
 
+    def _cached_device(self, appliance_key: str) -> FanDevice | None:
+        """Return the last published device, if this coordinator has one."""
+        try:
+            data = self.data
+        except RuntimeError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        device = data.get(appliance_key)
+        if not isinstance(device, FanDevice):
+            return None
+        return device
+
+    def _lane(self, appliance_key: str) -> FanCommandLane:
+        """Return the command lane for one fan."""
+        lane = self._lanes.get(appliance_key)
+        if lane is None:
+            lane = FanCommandLane()
+            self._lanes[appliance_key] = lane
+        return lane
+
+    def _publish(self, appliance_key: str, device: FanDevice) -> None:
+        """Replace one fan in coordinator data."""
+        data = dict(self.data)
+        data[appliance_key] = device
+        self.async_set_updated_data(data)
+
     async def async_command(self, appliance_key: str, intent: Intent) -> None:
         """Plan the intent, send every write, then publish the folded device."""
-        device = self._require_device(appliance_key)
+
+        async def send(write: FeatureWrite) -> None:
+            device = self._require_device(appliance_key)
+            await self.client.async_set_endpoint_feature(
+                feature_request(device.endpoint_id, write)
+            )
+
         try:
-            writes = plan(device, intent)
+            await self._lane(appliance_key).run(
+                lambda: self._require_device(appliance_key),
+                intent,
+                send,
+                lambda device: self._publish(appliance_key, device),
+            )
         except CommandRejected as err:
             raise HomeAssistantError(str(err)) from err
-        endpoint_id = device.endpoint_id
-        try:
-            for write in writes:
-                await self.client.async_set_endpoint_feature(
-                    feature_request(endpoint_id, write)
-                )
         except AlexaApiError as err:
+            # The failed write may have reached the fan. Poll now. The debounced
+            # refresh waits a full scan interval.
+            self.hass.async_create_task(self.async_refresh())
             raise HomeAssistantError(str(err)) from err
-        current = self._require_device(appliance_key)
-        updated = apply_fan_state(current, expected_states(writes))
-        data = dict(self.data)
-        data[appliance_key] = updated
-        self.async_set_updated_data(data)
