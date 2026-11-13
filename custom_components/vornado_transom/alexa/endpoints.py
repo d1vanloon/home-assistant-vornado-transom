@@ -212,6 +212,11 @@ def apply_fan_state(device: FanDevice, states: Iterable[CapabilityState]) -> Fan
     )
 
 
+def mark_unavailable(device: FanDevice) -> FanDevice:
+    """Keep the last reading and mark the fan unavailable."""
+    return replace(device, available=False)
+
+
 CLIMATE_FORWARD = "forward"
 CLIMATE_REVERSE = "reverse"
 
