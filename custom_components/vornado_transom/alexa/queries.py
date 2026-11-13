@@ -1,5 +1,9 @@
 """Alexa Nexus GraphQL queries and mutations."""
 
+# Inferred. A fragment on the wrong type fails the whole poll. ToggleState
+# follows the property name the way RangeValue follows rangeValue.
+TOGGLE_STATE_TYPE = "ToggleState"
+
 QUERY_SMART_HOME_ENDPOINTS = """
 query Endpoints {
   endpoints {
@@ -108,6 +112,9 @@ query getFanStates(
             value
           }
         }
+        ... on TOGGLE_STATE_TYPE {
+          toggleStateValue
+        }
       }
       configuration {
         ... on RangeConfiguration {
@@ -121,7 +128,7 @@ query getFanStates(
     }
   }
 }
-"""
+""".replace("TOGGLE_STATE_TYPE", TOGGLE_STATE_TYPE)
 
 MUTATION_SET_ENDPOINT_FEATURES = """
 mutation updatePowerFeatureForEndpoints($featureControlRequests: [FeatureControlRequest!]!) {

@@ -187,15 +187,103 @@ def test_recorded_transom_matches_live_bindings() -> None:
     assert controls.direction.exhaust_mode.alexa_mode == "1"
     assert controls.direction.exhaust_mode.label == "Exhaust"
     assert controls.air_temperature_instance == "5"
+    climate = controls.auto_climate
+    assert climate is not None
+    assert climate.toggle_instance == "4"
+    assert climate.set_temperature_instance == "3"
+    assert (
+        climate.set_temperature_range.minimum,
+        climate.set_temperature_range.maximum,
+        climate.set_temperature_range.precision,
+    ) == (60.0, 90.0, 1.0)
     device = endpoints.apply_fan_state(
         verdict.device,
         [
             CapabilityState(
                 name=feature["name"],
                 instance=feature["instance"],
+                power_state=feature["power_state"],
+                mode_value=feature["mode_value"],
                 range_value=feature["range_value"],
             )
             for feature in fixture["fan_state"]["features"]
         ],
     )
+    assert device.power == "OFF"
+    assert device.speed_mode is None
+    assert device.direction_mode is None
+    assert device.target_temperature is None
     assert device.air_temperature == 72.0
+    assert device.auto_on is None
+
+
+def _recorded():
+    fixture = json.loads(
+        (Path(__file__).parent / "fixtures" / "transom_alexa.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    verdict = endpoints.classify_endpoint(fixture["endpoint"])
+    assert isinstance(verdict, Admitted)
+    return verdict.device
+
+
+def test_apply_fan_state_folds_auto_setpoint_and_sentinels() -> None:
+    """Toggle and in-range setpoints stick. 0 and unknown modes clear the field."""
+    device = _recorded()
+    reading = endpoints.apply_fan_state(
+        device,
+        [
+            CapabilityState(name="toggle", instance="4", toggle_enabled=True),
+            CapabilityState(name="range", instance="3", range_value=72.0),
+            CapabilityState(name="range", instance="5", range_value=0.0),
+            CapabilityState(name="mode", instance="1", mode_value="3"),
+            CapabilityState(name="mode", instance="2", mode_value="2"),
+        ],
+    )
+    assert reading.auto_on is True
+    assert reading.target_temperature == 72.0
+    assert reading.air_temperature == 0.0
+    assert reading.speed_mode == "3"
+    assert reading.direction_mode == "2"
+
+    kept = endpoints.apply_fan_state(
+        reading,
+        [
+            CapabilityState(name="toggle", instance="4"),
+            CapabilityState(name="range", instance="3"),
+        ],
+    )
+    assert kept.auto_on is True
+    assert kept.target_temperature == 72.0
+
+    cleared = endpoints.apply_fan_state(
+        reading,
+        [
+            CapabilityState(name="toggle", instance="4", toggle_enabled=False),
+            CapabilityState(name="range", instance="3", range_value=0.0),
+            CapabilityState(name="range", instance="3", range_value=59.0),
+            CapabilityState(name="mode", instance="1", mode_value="0"),
+            CapabilityState(name="mode", instance="2", mode_value="0"),
+        ],
+    )
+    assert cleared.auto_on is False
+    assert cleared.target_temperature is None
+    assert cleared.speed_mode is None
+    assert cleared.direction_mode is None
+    assert cleared.air_temperature == 0.0
+
+
+def test_synthetic_fan_without_climate_controllers_has_no_auto_climate() -> None:
+    """Climate features on a speed-only fan do not create auto state."""
+    device = _template()
+    assert device.controls.auto_climate is None
+    folded = endpoints.apply_fan_state(
+        device,
+        [
+            CapabilityState(name="toggle", instance="4", toggle_enabled=True),
+            CapabilityState(name="range", instance="3", range_value=72.0),
+        ],
+    )
+    assert folded.auto_on is None
+    assert folded.target_temperature is None
