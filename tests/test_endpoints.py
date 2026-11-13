@@ -274,6 +274,27 @@ def test_apply_fan_state_folds_auto_setpoint_and_sentinels() -> None:
     assert cleared.air_temperature == 0.0
 
 
+def test_poll_keeps_cached_auto_when_the_reading_omits_the_toggle() -> None:
+    """A later poll starts from the published device, not the discovery template."""
+    cached = endpoints.apply_fan_state(
+        _recorded(),
+        [CapabilityState(name="toggle", instance="4", toggle_enabled=True)],
+    )
+    folded = endpoints.fold_poll(
+        cached,
+        _recorded(),
+        [CapabilityState(name="power", power_state="ON")],
+    )
+    assert folded.auto_on is True
+    assert folded.power == "ON"
+    reset = endpoints.fold_poll(
+        None,
+        _recorded(),
+        [CapabilityState(name="power", power_state="ON")],
+    )
+    assert reset.auto_on is None
+
+
 def test_unavailable_keeps_the_last_climate_reading() -> None:
     """A failed poll must not forget auto or the setpoint."""
     device = endpoints.apply_fan_state(

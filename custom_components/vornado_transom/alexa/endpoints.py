@@ -217,6 +217,15 @@ def mark_unavailable(device: FanDevice) -> FanDevice:
     return replace(device, available=False)
 
 
+def fold_poll(
+    cached: FanDevice | None,
+    template: FanDevice,
+    states: Iterable[CapabilityState],
+) -> FanDevice:
+    """Fold a poll onto the last published device, or the template on the first poll."""
+    return apply_fan_state(template if cached is None else cached, states)
+
+
 CLIMATE_FORWARD = "forward"
 CLIMATE_REVERSE = "reverse"
 

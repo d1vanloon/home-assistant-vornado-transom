@@ -203,7 +203,8 @@ def test_empty_climate_off_does_not_publish() -> None:
         raise AssertionError(write)
 
     asyncio.run(
-        execution.FanCommandLane().run(
+        execution.CommandGate().run(
+            "abc123",
             lambda: device,
             commands.SetHvacAuto(False),
             send,
@@ -216,17 +217,22 @@ def test_empty_climate_off_does_not_publish() -> None:
 
 def test_failed_setpoint_keeps_the_power_and_auto_writes() -> None:
     """A failed range write still records the power and auto writes that succeeded."""
-    device = _device(power="OFF", auto_on=False)
+    current = _device(power="OFF", auto_on=False)
     published: list = []
 
     async def send(write: object) -> None:
+        nonlocal current
+        if isinstance(write, commands.PowerWrite):
+            current = _device(power="OFF", auto_on=False)
+            current.air_temperature = 71.0
         if isinstance(write, commands.RangeWrite):
             raise models.AlexaApiError("range failed")
 
     with pytest.raises(models.AlexaApiError, match="range failed"):
         asyncio.run(
-            execution.FanCommandLane().run(
-                lambda: device,
+            execution.CommandGate().run(
+                "abc123",
+                lambda: current,
                 commands.SetTargetTemperature(72),
                 send,
                 published.append,
@@ -236,6 +242,7 @@ def test_failed_setpoint_keeps_the_power_and_auto_writes() -> None:
     assert published[0].power == "ON"
     assert published[0].auto_on is True
     assert published[0].target_temperature is None
+    assert published[0].air_temperature == 71.0
 
 
 def test_a_failed_first_write_publishes_nothing() -> None:
@@ -247,7 +254,8 @@ def test_a_failed_first_write_publishes_nothing() -> None:
 
     with pytest.raises(models.AlexaApiError, match="down"):
         asyncio.run(
-            execution.FanCommandLane().run(
+            execution.CommandGate().run(
+                "abc123",
                 lambda: device,
                 commands.SetHvacAuto(True),
                 send,
@@ -257,11 +265,79 @@ def test_a_failed_first_write_publishes_nothing() -> None:
     assert published == []
 
 
+def test_a_connection_error_keeps_writes_that_succeeded() -> None:
+    """Power and auto remain published when the setpoint request cannot connect."""
+
+    class CannotConnect(Exception):
+        pass
+
+    device = _device(power="OFF", auto_on=False)
+    published: list = []
+
+    async def send(write: object) -> None:
+        if isinstance(write, commands.RangeWrite):
+            raise CannotConnect("socket closed")
+
+    with pytest.raises(CannotConnect, match="socket closed"):
+        asyncio.run(
+            execution.CommandGate().run(
+                "abc123",
+                lambda: device,
+                commands.SetTargetTemperature(72),
+                send,
+                published.append,
+                (CannotConnect,),
+            )
+        )
+    assert published[0].power == "ON"
+    assert published[0].auto_on is True
+    assert published[0].target_temperature is None
+
+
+def test_a_poll_started_before_a_command_keeps_the_command() -> None:
+    """An in-flight poll must not publish the snapshot it took before the command."""
+
+    async def scenario() -> None:
+        gate = execution.CommandGate()
+        device = _device(power="OFF", auto_on=False)
+        started = {"abc123": gate.epoch("abc123")}
+
+        def publish(updated) -> None:
+            nonlocal device
+            device = updated
+
+        async def send(write: object) -> None:
+            return None
+
+        await gate.run(
+            "abc123",
+            lambda: device,
+            commands.SetHvacAuto(True),
+            send,
+            publish,
+        )
+        stale = _device(power="OFF", auto_on=None)
+        merged = await gate.merge_poll(started, {"abc123": stale}, lambda key: device)
+        assert merged["abc123"].auto_on is True
+        assert merged["abc123"].power == "ON"
+
+        fresh = _device(power="ON", auto_on=True)
+        fresh.air_temperature = 70.0
+        current = await gate.merge_poll(
+            {"abc123": gate.epoch("abc123")},
+            {"abc123": fresh},
+            lambda key: device,
+        )
+        assert current["abc123"].air_temperature == 70.0
+
+    asyncio.run(scenario())
+
+
 def test_commands_for_one_fan_run_one_at_a_time() -> None:
     """Off waits until Auto publishes, so it does not plan against the old state."""
 
     async def scenario() -> None:
-        lane = execution.FanCommandLane()
+        lane = execution.CommandGate()
         device = _device(power="OFF", auto_on=False)
         sent: list = []
         first_write = asyncio.Event()
@@ -278,6 +354,7 @@ def test_commands_for_one_fan_run_one_at_a_time() -> None:
 
         async def turn_auto_on() -> None:
             await lane.run(
+                "abc123",
                 lambda: device,
                 commands.SetHvacAuto(True),
                 send,
@@ -287,6 +364,7 @@ def test_commands_for_one_fan_run_one_at_a_time() -> None:
         async def turn_auto_off() -> None:
             await first_write.wait()
             await lane.run(
+                "abc123",
                 lambda: device,
                 commands.SetHvacAuto(False),
                 send,
