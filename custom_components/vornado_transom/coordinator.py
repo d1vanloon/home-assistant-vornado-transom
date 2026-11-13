@@ -24,12 +24,12 @@ from .alexa.commands import CommandRejected, FeatureWrite, Intent, feature_reque
 from .alexa.endpoints import (
     Gate,
     Rejected,
-    apply_fan_state,
     classify_endpoint,
+    fold_poll,
     kept_devices,
     mark_unavailable,
 )
-from .alexa.execution import FanCommandLane
+from .alexa.execution import CommandGate
 from .alexa.models import AlexaApiError, FanDevice
 from .const import CONF_LOGIN_DATA, DOMAIN, LOGGER, SCAN_INTERVAL
 
@@ -68,7 +68,13 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
             ),
         )
         self._controls_by_key: dict[str, FanDevice] = {}
-        self._lanes: dict[str, FanCommandLane] = {}
+        self._gate = CommandGate()
+        self._write_failures = (
+            AlexaApiError,
+            CannotAuthenticate,
+            CannotConnect,
+            CannotRetrieveData,
+        )
 
     async def _async_update_data(self) -> dict[str, FanDevice]:
         """Discover (once) and poll fan state."""
@@ -91,17 +97,23 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
                         "No Vornado Transom-compatible fans found"
                     )
 
-            devices: dict[str, FanDevice] = {}
+            started: dict[str, int] = {}
+            proposed: dict[str, FanDevice] = {}
             for key, template in self._controls_by_key.items():
+                started[key] = self._gate.epoch(key)
                 try:
                     states = await self.client.async_get_fan_state(template.endpoint_id)
-                    devices[key] = apply_fan_state(template, states)
+                    proposed[key] = fold_poll(self._cached_device(key), template, states)
                 except AlexaApiError as err:
                     LOGGER.warning(
                         "Failed to refresh fan %s: %s", template.name, err
                     )
-                    devices[key] = mark_unavailable(self._cached_device(key) or template)
-            return devices
+                    proposed[key] = mark_unavailable(
+                        self._cached_device(key) or template
+                    )
+            return await self._gate.merge_poll(
+                started, proposed, self._cached_device
+            )
         except CannotAuthenticate as err:
             raise ConfigEntryAuthFailed(
                 translation_domain=DOMAIN,
@@ -132,14 +144,6 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
             return None
         return device
 
-    def _lane(self, appliance_key: str) -> FanCommandLane:
-        """Return the command lane for one fan."""
-        lane = self._lanes.get(appliance_key)
-        if lane is None:
-            lane = FanCommandLane()
-            self._lanes[appliance_key] = lane
-        return lane
-
     def _publish(self, appliance_key: str, device: FanDevice) -> None:
         """Replace one fan in coordinator data."""
         data = dict(self.data)
@@ -156,16 +160,18 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
             )
 
         try:
-            await self._lane(appliance_key).run(
+            await self._gate.run(
+                appliance_key,
                 lambda: self._require_device(appliance_key),
                 intent,
                 send,
                 lambda device: self._publish(appliance_key, device),
+                self._write_failures,
             )
         except CommandRejected as err:
             raise HomeAssistantError(str(err)) from err
-        except AlexaApiError as err:
+        except self._write_failures as err:
             # The failed write may have reached the fan. Poll now. The debounced
-            # refresh waits a full scan interval.
+            # refresh waits a full scan interval, and a failed login starts reauth.
             self.hass.async_create_task(self.async_refresh())
             raise HomeAssistantError(str(err)) from err
