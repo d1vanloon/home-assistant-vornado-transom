@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .alexa.commands import SelectDirection, SelectSpeed, TurnOff, TurnOn
 from .alexa.endpoints import entity_contract
 from .coordinator import VornadoTransomConfigEntry, VornadoTransomCoordinator
 from .entity import VornadoTransomEntity
@@ -101,42 +102,26 @@ class VornadoTransomFan(VornadoTransomEntity, FanEntity):
         if preset_mode is not None:
             await self.async_set_preset_mode(preset_mode)
             return
-        await self.coordinator.async_set_power(self._appliance_key, True)
+        await self.coordinator.async_command(self._appliance_key, TurnOn())
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the fan off."""
-        await self.coordinator.async_set_power(self._appliance_key, False)
+        await self.coordinator.async_command(self._appliance_key, TurnOff())
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the speed preset mode."""
-        binding = next(
-            (
-                mode
-                for mode in self.device.controls.speed_modes
-                if mode.label == preset_mode
-            ),
-            None,
-        )
-        if binding is None:
-            raise HomeAssistantError(f"Invalid preset mode: {preset_mode}")
-
-        if self.device.power != "ON":
-            await self.coordinator.async_set_power(self._appliance_key, True)
-        await self.coordinator.async_set_speed_mode(
-            self._appliance_key, binding.alexa_mode
+        await self.coordinator.async_command(
+            self._appliance_key, SelectSpeed(preset_mode)
         )
 
     async def async_set_direction(self, direction: str) -> None:
         """Set the airflow direction."""
-        controls = self.device.controls.direction
-        if controls is None:
-            raise HomeAssistantError(_DIRECTION_UNSUPPORTED)
         if direction == DIRECTION_FORWARD:
-            alexa_mode = controls.direct_mode.alexa_mode
+            reverse = False
         elif direction == DIRECTION_REVERSE:
-            alexa_mode = controls.exhaust_mode.alexa_mode
+            reverse = True
         else:
             raise HomeAssistantError(f"Invalid direction: {direction}")
-        await self.coordinator.async_set_direction_mode(
-            self._appliance_key, alexa_mode
+        await self.coordinator.async_command(
+            self._appliance_key, SelectDirection(reverse)
         )

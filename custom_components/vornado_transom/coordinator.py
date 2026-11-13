@@ -20,6 +20,13 @@ from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .alexa.client import AlexaSmartHomeClient
+from .alexa.commands import (
+    CommandRejected,
+    Intent,
+    expected_states,
+    feature_request,
+    plan,
+)
 from .alexa.endpoints import (
     Gate,
     Rejected,
@@ -127,42 +134,23 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
             raise HomeAssistantError(f"Unknown fan device: {appliance_key}")
         return self.data[appliance_key]
 
-    async def async_set_power(self, appliance_key: str, turn_on: bool) -> None:
-        """Set power and optimistically update coordinator data."""
+    async def async_command(self, appliance_key: str, intent: Intent) -> None:
+        """Plan the intent, send every write, then publish the folded device."""
         device = self._require_device(appliance_key)
         try:
-            await self.client.async_set_power(device.endpoint_id, turn_on)
-        except AlexaApiError as err:
+            writes = plan(device, intent)
+        except CommandRejected as err:
             raise HomeAssistantError(str(err)) from err
-        device.power = "ON" if turn_on else "OFF"
-        self.async_set_updated_data(dict(self.data))
-
-    async def async_set_speed_mode(self, appliance_key: str, alexa_mode: str) -> None:
-        """Set speed mode and optimistically update coordinator data."""
-        device = self._require_device(appliance_key)
+        endpoint_id = device.endpoint_id
         try:
-            await self.client.async_set_mode(
-                device.endpoint_id, device.controls.speed_instance, alexa_mode
-            )
+            for write in writes:
+                await self.client.async_set_endpoint_feature(
+                    feature_request(endpoint_id, write)
+                )
         except AlexaApiError as err:
             raise HomeAssistantError(str(err)) from err
-        device.speed_mode = alexa_mode
-        device.power = "ON"
-        self.async_set_updated_data(dict(self.data))
-
-    async def async_set_direction_mode(
-        self, appliance_key: str, alexa_mode: str
-    ) -> None:
-        """Set direction mode and optimistically update coordinator data."""
-        device = self._require_device(appliance_key)
-        direction = device.controls.direction
-        if direction is None:
-            raise HomeAssistantError("This fan does not support airflow direction")
-        try:
-            await self.client.async_set_mode(
-                device.endpoint_id, direction.instance, alexa_mode
-            )
-        except AlexaApiError as err:
-            raise HomeAssistantError(str(err)) from err
-        device.direction_mode = alexa_mode
-        self.async_set_updated_data(dict(self.data))
+        current = self._require_device(appliance_key)
+        updated = apply_fan_state(current, expected_states(writes))
+        data = dict(self.data)
+        data[appliance_key] = updated
+        self.async_set_updated_data(data)

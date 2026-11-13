@@ -6,7 +6,13 @@ import json
 import re
 from typing import Any
 
-from .models import DirectionControls, FanControlMap, ModeBinding
+from .models import (
+    AutoClimateControls,
+    DirectionControls,
+    FanControlMap,
+    ModeBinding,
+    TemperatureRange,
+)
 
 SPEED_FALLBACK_LABELS = ("Low", "Medium", "High", "Turbo")
 DIRECTION_FALLBACK_LABELS = ("Direct", "Exhaust")
@@ -85,6 +91,55 @@ def match_air_temperature(capability: dict[str, Any]) -> bool:
         capability.get("interfaceName") == "Alexa.RangeController"
         and _has_instance(capability)
         and _has_friendly_name(capability, ("air temperature",))
+    )
+
+
+def match_auto_toggle(capability: dict[str, Any]) -> bool:
+    """Match a writable ToggleController whose name contains auto."""
+    return (
+        capability.get("interfaceName") == "Alexa.ToggleController"
+        and _is_not_read_only(capability)
+        and _has_instance(capability)
+        and _has_friendly_name(capability, ("auto",))
+    )
+
+
+def match_set_temperature(capability: dict[str, Any]) -> bool:
+    """Match a writable RangeController whose name contains set temperature."""
+    return (
+        capability.get("interfaceName") == "Alexa.RangeController"
+        and _is_not_read_only(capability)
+        and _has_instance(capability)
+        and _has_friendly_name(capability, ("set temperature",))
+    )
+
+
+def _temperature_range(capability: dict[str, Any]) -> TemperatureRange | None:
+    supported = _as_dict(_as_dict(capability.get("configuration")).get("supportedRange"))
+    try:
+        minimum = float(supported["minimumValue"])
+        maximum = float(supported["maximumValue"])
+        precision = float(supported["precision"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not (minimum < maximum and precision > 0):
+        return None
+    return TemperatureRange(minimum, maximum, precision)
+
+
+def _auto_climate(capabilities: list[dict[str, Any]]) -> AutoClimateControls | None:
+    """Both climate controllers, or None. A partial climate control is not a fan rejection."""
+    toggle = next((cap for cap in capabilities if match_auto_toggle(cap)), None)
+    setpoint = next((cap for cap in capabilities if match_set_temperature(cap)), None)
+    if toggle is None or setpoint is None:
+        return None
+    span = _temperature_range(setpoint)
+    if span is None:
+        return None
+    return AutoClimateControls(
+        str(toggle["instance"]),
+        str(setpoint["instance"]),
+        span,
     )
 
 
@@ -213,6 +268,9 @@ def discover_vornado_controls(capabilities: Any) -> tuple[FanControlMap | None, 
 
     A fan with no matching direction controller is returned as speed-only.
     An Air Temperature range, when present, is recorded for the sensor.
+    Auto climate is recorded only when both a writable auto toggle and a
+    writable set-temperature range are present and well formed. Missing or
+    malformed climate controls do not reject the fan.
     A matching direction controller that cannot build both modes rejects
     the whole capability list. The string is why discovery failed, or empty
     when a fan was found.
@@ -256,6 +314,7 @@ def discover_vornado_controls(capabilities: Any) -> tuple[FanControlMap | None, 
             air_temperature_instance=(
                 None if air_cap is None else str(air_cap["instance"])
             ),
+            auto_climate=_auto_climate(parsed),
         ),
         "",
     )

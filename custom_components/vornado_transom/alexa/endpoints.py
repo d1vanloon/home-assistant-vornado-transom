@@ -121,6 +121,8 @@ class FeatureRole(StrEnum):
     SPEED = "speed"
     DIRECTION = "direction"
     AIR_TEMPERATURE = "air_temperature"
+    SET_TEMPERATURE = "set_temperature"
+    AUTO = "auto"
     IGNORED = "ignored"
 
 
@@ -139,31 +141,73 @@ def feature_role(controls: FanControlMap, state: CapabilityState) -> FeatureRole
         and state.instance == controls.air_temperature_instance
     ):
         return FeatureRole.AIR_TEMPERATURE
+    climate = controls.auto_climate
+    if (
+        climate is not None
+        and state.name == "range"
+        and state.instance == climate.set_temperature_instance
+    ):
+        return FeatureRole.SET_TEMPERATURE
+    if (
+        climate is not None
+        and state.name == "toggle"
+        and state.instance == climate.toggle_instance
+    ):
+        return FeatureRole.AUTO
     return FeatureRole.IGNORED
 
 
 def apply_fan_state(device: FanDevice, states: Iterable[CapabilityState]) -> FanDevice:
-    """Fold polled features into a new available FanDevice. A None value keeps the old one."""
+    """Fold polled features into a new available FanDevice.
+
+    A None value keeps the previous field. A reported speed, direction, or set
+    temperature outside the discovered domain becomes None. Air temperature is
+    kept as reported, including 0.
+    """
     power = device.power
     speed_mode = device.speed_mode
     direction_mode = device.direction_mode
     air_temperature = device.air_temperature
+    auto_on = device.auto_on
+    target_temperature = device.target_temperature
+    speed_modes = {mode.alexa_mode for mode in device.controls.speed_modes}
+    direction = device.controls.direction
+    direction_modes = (
+        set()
+        if direction is None
+        else {direction.direct_mode.alexa_mode, direction.exhaust_mode.alexa_mode}
+    )
+    climate = device.controls.auto_climate
+    span = None if climate is None else climate.set_temperature_range
     for state in states:
         match feature_role(device.controls, state):
             case FeatureRole.POWER if state.power_state is not None:
                 power = state.power_state
             case FeatureRole.SPEED if state.mode_value is not None:
-                speed_mode = state.mode_value
+                speed_mode = state.mode_value if state.mode_value in speed_modes else None
             case FeatureRole.DIRECTION if state.mode_value is not None:
-                direction_mode = state.mode_value
+                direction_mode = (
+                    state.mode_value if state.mode_value in direction_modes else None
+                )
             case FeatureRole.AIR_TEMPERATURE if state.range_value is not None:
                 air_temperature = state.range_value
+            case FeatureRole.AUTO if state.toggle_enabled is not None:
+                auto_on = state.toggle_enabled
+            case FeatureRole.SET_TEMPERATURE if state.range_value is not None:
+                value = state.range_value
+                target_temperature = (
+                    value
+                    if span is not None and span.minimum <= value <= span.maximum
+                    else None
+                )
     return replace(
         device,
         power=power,
         speed_mode=speed_mode,
         direction_mode=direction_mode,
         air_temperature=air_temperature,
+        auto_on=auto_on,
+        target_temperature=target_temperature,
         available=True,
     )
 
