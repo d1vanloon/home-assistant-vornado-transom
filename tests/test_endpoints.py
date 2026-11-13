@@ -84,6 +84,14 @@ def test_mode_without_value_is_rejected() -> None:
     assert _gate(endpoint(caps=[speed])) is Gate.CONTROLS
 
 
+def test_matching_direction_without_a_value_is_rejected() -> None:
+    caps = capabilities()
+    direction = caps[-1]
+    direction["configuration"]["supportedModes"][0] = mode("ignored", "Direct")
+    del direction["configuration"]["supportedModes"][0]["value"]
+    assert _gate(endpoint(caps=caps)) is Gate.CONTROLS
+
+
 def test_last_duplicate_appliance_key_is_kept() -> None:
     first = endpoints.classify_endpoint(endpoint("abc123", name="First"))
     second = endpoints.classify_endpoint(endpoint("abc123", name="Second"))

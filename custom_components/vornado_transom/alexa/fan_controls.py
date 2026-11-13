@@ -202,9 +202,9 @@ def parse_capabilities(raw: Any) -> list[dict[str, Any]] | None:
 def discover_vornado_controls(capabilities: Any) -> FanControlMap | None:
     """Discover fans that expose a 4-speed ModeController.
 
-    Direction is attached only for a Transom-style 2-mode Direct/Exhaust
-    controller. Fans with no direction controller, or with a differently
-    shaped one, are still returned as speed-only maps.
+    A fan with no matching direction controller is returned as speed-only.
+    A matching direction controller that cannot build both modes rejects
+    the whole capability list.
     """
     parsed = (
         capabilities
@@ -227,13 +227,14 @@ def discover_vornado_controls(capabilities: Any) -> FanControlMap | None:
     direction_cap = next((cap for cap in parsed if match_mode_direction(cap)), None)
     if direction_cap is not None:
         built = _build_direction_modes(direction_cap)
-        if built is not None:
-            direct_mode, exhaust_mode = built
-            direction = DirectionControls(
-                instance=str(direction_cap["instance"]),
-                direct_mode=direct_mode,
-                exhaust_mode=exhaust_mode,
-            )
+        if built is None:
+            return None
+        direct_mode, exhaust_mode = built
+        direction = DirectionControls(
+            instance=str(direction_cap["instance"]),
+            direct_mode=direct_mode,
+            exhaust_mode=exhaust_mode,
+        )
 
     return FanControlMap(
         speed_instance=str(speed_cap["instance"]),
