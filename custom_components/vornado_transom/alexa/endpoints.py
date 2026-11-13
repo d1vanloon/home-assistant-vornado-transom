@@ -212,6 +212,37 @@ def apply_fan_state(device: FanDevice, states: Iterable[CapabilityState]) -> Fan
     )
 
 
+CLIMATE_FORWARD = "forward"
+CLIMATE_REVERSE = "reverse"
+
+
+def climate_target_temperature(device: FanDevice) -> float | None:
+    """Temperature the climate card can render.
+
+    Home Assistant draws the setpoint control only when the temperature
+    attribute is a number. The device reports 0 for no setpoint, and the fold
+    stores that as None, so the card falls back to the discovered minimum.
+    """
+    climate = device.controls.auto_climate
+    if climate is None:
+        return None
+    if device.target_temperature is not None:
+        return device.target_temperature
+    return climate.set_temperature_range.minimum
+
+
+def climate_swing_mode(device: FanDevice) -> str | None:
+    """Forward or reverse for the climate card, from the direction controller."""
+    direction = device.controls.direction
+    if direction is None or not device.direction_mode:
+        return None
+    if device.direction_mode == direction.direct_mode.alexa_mode:
+        return CLIMATE_FORWARD
+    if device.direction_mode == direction.exhaust_mode.alexa_mode:
+        return CLIMATE_REVERSE
+    return None
+
+
 @dataclass(frozen=True)
 class DirectionModes:
     """Alexa mode values for forward and reverse airflow."""
