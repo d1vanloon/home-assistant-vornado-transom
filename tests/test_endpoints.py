@@ -81,7 +81,10 @@ def test_mode_without_value_is_rejected() -> None:
     speed = speed_capability()
     speed["configuration"]["supportedModes"][0] = mode("ignored", "Low")
     del speed["configuration"]["supportedModes"][0]["value"]
-    assert _gate(endpoint(caps=[speed])) is Gate.CONTROLS
+    verdict = endpoints.classify_endpoint(endpoint(caps=[speed]))
+    assert isinstance(verdict, Rejected)
+    assert verdict.gate is Gate.CONTROLS
+    assert verdict.detail == "speed ModeController has a mode with no value"
 
 
 def test_matching_direction_without_a_value_is_rejected() -> None:
@@ -89,7 +92,10 @@ def test_matching_direction_without_a_value_is_rejected() -> None:
     direction = caps[-1]
     direction["configuration"]["supportedModes"][0] = mode("ignored", "Direct")
     del direction["configuration"]["supportedModes"][0]["value"]
-    assert _gate(endpoint(caps=caps)) is Gate.CONTROLS
+    verdict = endpoints.classify_endpoint(endpoint(caps=caps))
+    assert isinstance(verdict, Rejected)
+    assert verdict.gate is Gate.CONTROLS
+    assert verdict.detail == "matching direction controller has a mode with no value"
 
 
 def test_last_duplicate_appliance_key_is_kept() -> None:

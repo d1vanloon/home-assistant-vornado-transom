@@ -199,12 +199,13 @@ def parse_capabilities(raw: Any) -> list[dict[str, Any]] | None:
     return [item for item in parsed if isinstance(item, dict)]
 
 
-def discover_vornado_controls(capabilities: Any) -> FanControlMap | None:
+def discover_vornado_controls(capabilities: Any) -> tuple[FanControlMap | None, str]:
     """Discover fans that expose a 4-speed ModeController.
 
     A fan with no matching direction controller is returned as speed-only.
     A matching direction controller that cannot build both modes rejects
-    the whole capability list.
+    the whole capability list. The string is why discovery failed, or empty
+    when a fan was found.
     """
     parsed = (
         capabilities
@@ -213,22 +214,22 @@ def discover_vornado_controls(capabilities: Any) -> FanControlMap | None:
         else parse_capabilities(capabilities)
     )
     if not parsed:
-        return None
+        return None, "capability list is empty"
 
     speed_cap = next((cap for cap in parsed if match_mode_speed(cap)), None)
     if speed_cap is None:
-        return None
+        return None, "no writable, ordered, 4-mode speed ModeController"
 
     speed_modes = _build_speed_modes(speed_cap)
     if len(speed_modes) != 4:
-        return None
+        return None, "speed ModeController has a mode with no value"
 
     direction: DirectionControls | None = None
     direction_cap = next((cap for cap in parsed if match_mode_direction(cap)), None)
     if direction_cap is not None:
         built = _build_direction_modes(direction_cap)
         if built is None:
-            return None
+            return None, "matching direction controller has a mode with no value"
         direct_mode, exhaust_mode = built
         direction = DirectionControls(
             instance=str(direction_cap["instance"]),
@@ -236,8 +237,11 @@ def discover_vornado_controls(capabilities: Any) -> FanControlMap | None:
             exhaust_mode=exhaust_mode,
         )
 
-    return FanControlMap(
-        speed_instance=str(speed_cap["instance"]),
-        speed_modes=speed_modes,
-        direction=direction,
+    return (
+        FanControlMap(
+            speed_instance=str(speed_cap["instance"]),
+            speed_modes=speed_modes,
+            direction=direction,
+        ),
+        "",
     )

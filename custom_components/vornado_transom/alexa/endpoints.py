@@ -61,14 +61,9 @@ def classify_endpoint(endpoint: Mapping[str, Any]) -> Admitted | Rejected:
             Gate.CAPABILITIES, "legacyAppliance.capabilities is missing or not a JSON list"
         )
 
-    controls = discover_vornado_controls(capabilities)
+    controls, detail = discover_vornado_controls(capabilities)
     if controls is None:
-        return Rejected(
-            Gate.CONTROLS,
-            "capability list is empty"
-            if not capabilities
-            else "no writable, ordered, 4-mode speed ModeController",
-        )
+        return Rejected(Gate.CONTROLS, detail)
 
     appliance_key = _appliance_key(endpoint)
     endpoint_id = _endpoint_id(endpoint)
