@@ -13,6 +13,7 @@ The fans are exposed through Amazon's Alexa Smart Home service, so this integrat
   - **Power** on/off.
   - **Preset modes** for the fan's speed levels (discovered automatically per device).
   - **Direction** control — `forward` (direct airflow) and `reverse` (exhaust) — when a Transom-style 2-mode Direct/Exhaust controller is present.
+  - An **air temperature** sensor when the fan exposes that reading.
 - Automatic re-authentication flow when your Amazon session expires.
 - Polls the cloud every 60 seconds for state updates.
 

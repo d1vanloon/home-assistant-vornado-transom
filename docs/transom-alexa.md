@@ -50,4 +50,6 @@ Discovery keeps this endpoint. Speed uses ModeController instance `1`. The prese
 
 Direction uses ModeController instance `2`. Direct is Alexa mode `2`. Exhaust is Alexa mode `1`. Forward sends Direct. Reverse sends Exhaust.
 
-Set temperature, air temperature, and the autoclimate toggle are on the device. Discovery does not bind them.
+Air temperature uses RangeController instance `5`. The sensor reports degrees Fahrenheit.
+
+Set temperature and the autoclimate toggle are on the device. Discovery does not bind them.
