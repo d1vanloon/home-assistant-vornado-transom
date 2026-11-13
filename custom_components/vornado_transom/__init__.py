@@ -8,7 +8,7 @@ from homeassistant.helpers import aiohttp_client
 
 from .coordinator import VornadoTransomConfigEntry, VornadoTransomCoordinator
 
-PLATFORMS = [Platform.FAN, Platform.SENSOR]
+PLATFORMS = [Platform.FAN, Platform.SENSOR, Platform.CLIMATE]
 
 
 async def async_setup_entry(

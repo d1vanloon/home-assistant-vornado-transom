@@ -34,7 +34,7 @@ The display category is `FAN`. Enablement is `ENABLED`. Manufacturer text is Vor
 
 ## Fan state while off
 
-`fan_state.features` is the parsed state from the same read. The client stores power, mode, and range only, so the toggle value from Alexa is not in the file.
+`fan_state.features` is the parsed state from the same read. The toggle value from Alexa is not in the file.
 
 - `power` is `OFF`.
 - Mode instance `1` is `0`.
@@ -42,7 +42,7 @@ The display category is `FAN`. Enablement is `ENABLED`. Manufacturer text is Vor
 - Range instance `3` is `0`.
 - Range instance `5` is `72`.
 
-`0` is not a supported mode value. The fan was off. `0` is also below the set-temperature range of 60 to 90.
+`0` is not a supported mode value. The fan was off. `0` is also below the set-temperature range of 60 to 90. The fold stores those as no speed, no direction, and no target temperature. Air temperature `72` stays `72.0`.
 
 ## Bindings
 
@@ -52,4 +52,8 @@ Direction uses ModeController instance `2`. Direct is Alexa mode `2`. Exhaust is
 
 Air temperature uses RangeController instance `5`. The sensor reports degrees Fahrenheit.
 
-Set temperature and the autoclimate toggle are on the device. Discovery does not bind them.
+Set temperature uses RangeController instance `3`. The discovered range is 60 to 90 degrees, and the precision is 1.
+
+Auto uses ToggleController instance `4`.
+
+Both bindings are required for the climate entity. It is named Auto climate, with HVAC modes off and auto, target temperature from the set-temperature range, and fan modes that are the same speed labels as the fan entity. When the device reports no setpoint, the card still shows the range minimum so the setpoint control is present. Direction stays on the fan entity. The fan entity remains the manual on/off and speed control.
