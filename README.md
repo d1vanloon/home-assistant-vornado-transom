@@ -14,7 +14,7 @@ The fans are exposed through Amazon's Alexa Smart Home service, so this integrat
   - **Preset modes** for the fan's speed levels (discovered automatically per device).
   - **Direction** control — `forward` (direct airflow) and `reverse` (exhaust) — when a Transom-style 2-mode Direct/Exhaust controller is present.
   - An **air temperature** sensor when the fan exposes that reading.
-- An optional `climate` entity named **Auto climate**, with HVAC off and auto, target temperature, and the same discovered speed labels as fan modes. It appears only when the device has both the auto toggle and the set-temperature range. The fan entity remains the manual on/off and speed control.
+- An optional `climate` entity named **Auto climate**, with HVAC off and auto, a target temperature, and the same discovered speed labels as fan modes. Forward and reverse airflow are on that card when the fan has a direction controller. Home Assistant labels that list swing mode. The entity appears only when the device has both the auto toggle and the set-temperature range. The fan entity remains the manual on/off and speed control.
 - Automatic re-authentication flow when your Amazon session expires.
 - Polls the cloud every 60 seconds for state updates.
 
