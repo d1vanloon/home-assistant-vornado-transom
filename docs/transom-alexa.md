@@ -56,4 +56,4 @@ Set temperature uses RangeController instance `3`. The discovered range is 60 to
 
 Auto uses ToggleController instance `4`.
 
-Both bindings are required for the climate entity. It is named Auto climate, with HVAC modes off and auto, target temperature from the set-temperature range, and fan modes that are the same speed labels as the fan entity. When the device reports no setpoint, the card still shows the range minimum so the setpoint control is present. Direction is forward and reverse on that card, which Home Assistant labels swing mode. The fan entity remains the manual on/off and speed control.
+Both bindings are required for the climate entity. It is named Auto climate, with HVAC modes off and auto, target temperature from the set-temperature range, and fan modes that are the same speed labels as the fan entity. When the device reports no setpoint, the card still shows the range minimum so the setpoint control is present. Direction stays on the fan entity. The fan entity remains the manual on/off and speed control.
