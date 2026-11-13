@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from aioamazondevices.exceptions import (
     CannotAuthenticate,
@@ -21,11 +20,15 @@ from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .alexa.client import AlexaSmartHomeClient
-from .alexa.fan_controls import discover_vornado_controls, parse_capabilities
+from .alexa.endpoints import (
+    Gate,
+    Rejected,
+    apply_fan_state,
+    classify_endpoint,
+    kept_devices,
+)
 from .alexa.models import AlexaApiError, FanDevice
 from .const import CONF_LOGIN_DATA, DOMAIN, LOGGER, SCAN_INTERVAL
-
-ENDPOINT_PREFIX = "amzn1.alexa.endpoint."
 
 type VornadoTransomConfigEntry = ConfigEntry[VornadoTransomCoordinator]
 
@@ -63,116 +66,22 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
         )
         self._controls_by_key: dict[str, FanDevice] = {}
 
-    @staticmethod
-    def _appliance_key(endpoint: dict[str, Any]) -> str:
-        """Derive a stable appliance key for an endpoint."""
-        legacy = endpoint.get("legacyAppliance") or {}
-        if key := legacy.get("applianceKey"):
-            return str(key)
-        endpoint_id = str(endpoint.get("id") or endpoint.get("endpointId") or "")
-        if endpoint_id.startswith(ENDPOINT_PREFIX):
-            return endpoint_id.removeprefix(ENDPOINT_PREFIX)
-        return endpoint_id
-
-    @staticmethod
-    def _text_value(field: Any) -> str | None:
-        """Extract nested Alexa text value fields."""
-        if not isinstance(field, dict):
-            return None
-        value = field.get("value")
-        if isinstance(value, dict):
-            text = value.get("text")
-            return str(text) if text is not None else None
-        return None
-
-    def _discover_devices(self, endpoints: list[dict[str, Any]]) -> dict[str, FanDevice]:
-        """Filter FAN endpoints that match the Transom capability pattern."""
-        discovered: dict[str, FanDevice] = {}
-        for endpoint in endpoints:
-            enablement = endpoint.get("enablement")
-            if enablement is not None and enablement != "ENABLED":
-                continue
-
-            display = endpoint.get("displayCategories") or {}
-            primary = (display.get("primary") or {}).get("value")
-            if primary != "FAN":
-                continue
-
-            legacy = endpoint.get("legacyAppliance") or {}
-            capabilities = parse_capabilities(legacy.get("capabilities"))
-            if capabilities is None:
-                LOGGER.debug(
-                    "Skipping endpoint %s: capability parse failure",
-                    endpoint.get("friendlyName") or endpoint.get("id"),
-                )
-                continue
-
-            controls = discover_vornado_controls(capabilities)
-            if controls is None:
-                continue
-
-            appliance_key = self._appliance_key(endpoint)
-            endpoint_id = str(endpoint.get("id") or endpoint.get("endpointId") or "")
-            if not appliance_key or not endpoint_id:
-                continue
-
-            discovered[appliance_key] = FanDevice(
-                endpoint_id=endpoint_id,
-                appliance_key=appliance_key,
-                name=str(endpoint.get("friendlyName") or appliance_key),
-                serial_number=self._text_value(endpoint.get("serialNumber")),
-                model=self._text_value(endpoint.get("model")),
-                manufacturer=self._text_value(endpoint.get("manufacturer")),
-                controls=controls,
-            )
-        return discovered
-
-    async def _async_refresh_device_state(self, device: FanDevice) -> FanDevice:
-        """Poll power/speed/direction for one device."""
-        states = await self.client.async_get_fan_state(device.endpoint_id)
-        power = device.power
-        speed_mode = device.speed_mode
-        direction_mode = device.direction_mode
-        direction = device.controls.direction
-
-        for state in states:
-            if state.name == "power" and state.power_state is not None:
-                power = state.power_state
-            elif (
-                state.name == "mode"
-                and state.instance == device.controls.speed_instance
-                and state.mode_value is not None
-            ):
-                speed_mode = state.mode_value
-            elif (
-                direction is not None
-                and state.name == "mode"
-                and state.instance == direction.instance
-                and state.mode_value is not None
-            ):
-                direction_mode = state.mode_value
-
-        return FanDevice(
-            endpoint_id=device.endpoint_id,
-            appliance_key=device.appliance_key,
-            name=device.name,
-            serial_number=device.serial_number,
-            model=device.model,
-            manufacturer=device.manufacturer,
-            controls=device.controls,
-            power=power,
-            speed_mode=speed_mode,
-            direction_mode=direction_mode,
-            available=True,
-        )
-
     async def _async_update_data(self) -> dict[str, FanDevice]:
         """Discover (once) and poll fan state."""
         try:
             await self.client.async_login_stored()
             if not self._controls_by_key:
                 endpoints = await self.client.async_get_endpoints()
-                self._controls_by_key = self._discover_devices(endpoints)
+                verdicts = []
+                for endpoint in endpoints:
+                    verdict = classify_endpoint(endpoint)
+                    if isinstance(verdict, Rejected) and verdict.gate is Gate.CAPABILITIES:
+                        LOGGER.debug(
+                            "Skipping endpoint %s: capability parse failure",
+                            endpoint.get("friendlyName") or endpoint.get("id"),
+                        )
+                    verdicts.append(verdict)
+                self._controls_by_key = kept_devices(verdicts)
                 if not self._controls_by_key:
                     LOGGER.warning(
                         "No Vornado Transom-compatible fans found"
@@ -181,7 +90,8 @@ class VornadoTransomCoordinator(DataUpdateCoordinator[dict[str, FanDevice]]):
             devices: dict[str, FanDevice] = {}
             for key, template in self._controls_by_key.items():
                 try:
-                    devices[key] = await self._async_refresh_device_state(template)
+                    states = await self.client.async_get_fan_state(template.endpoint_id)
+                    devices[key] = apply_fan_state(template, states)
                 except AlexaApiError as err:
                     LOGGER.warning(
                         "Failed to refresh fan %s: %s", template.name, err

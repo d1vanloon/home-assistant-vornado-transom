@@ -1,0 +1,641 @@
+{
+  "note": "Identity fields are placeholders. Capability and feature objects are from one Vornado Transom Alexa Nexus response. fan_state is the parsed feature state from that same read, while the fan was off.",
+  "endpoint": {
+    "id": "amzn1.alexa.endpoint.00000000-0000-4000-8000-000000000001",
+    "endpointId": "amzn1.alexa.endpoint.00000000-0000-4000-8000-000000000001",
+    "friendlyName": "Transom",
+    "displayCategories": {
+      "primary": {
+        "value": "FAN"
+      }
+    },
+    "enablement": "ENABLED",
+    "manufacturer": {
+      "value": {
+        "text": "Vornado"
+      }
+    },
+    "model": {
+      "value": {
+        "text": "A1AZ0VKGUB06NH"
+      }
+    },
+    "serialNumber": {
+      "value": {
+        "text": null
+      }
+    },
+    "legacyIdentifiers": {
+      "dmsIdentifier": {
+        "deviceType": {
+          "type": "PLAIN",
+          "value": {
+            "text": "A1AZ0VKGUB06NH"
+          }
+        },
+        "deviceSerialNumber": {
+          "type": "text",
+          "value": {
+            "text": null
+          }
+        }
+      }
+    },
+    "features": [
+      {
+        "name": "connectivity",
+        "operations": null
+      },
+      {
+        "name": "power",
+        "operations": [
+          {
+            "name": "turnOn"
+          },
+          {
+            "name": "turnOff"
+          }
+        ]
+      },
+      {
+        "name": "mode",
+        "operations": null
+      },
+      {
+        "name": "mode",
+        "operations": null
+      },
+      {
+        "name": "range",
+        "operations": null
+      },
+      {
+        "name": "range",
+        "operations": null
+      },
+      {
+        "name": "toggle",
+        "operations": null
+      },
+      {
+        "name": "endpointHealth",
+        "operations": null
+      }
+    ],
+    "legacyAppliance": {
+      "applianceKey": "00000000-0000-4000-8000-000000000001",
+      "applianceTypes": [
+        "FAN"
+      ],
+      "friendlyName": "Transom",
+      "friendlyDescription": "Vornado Transom",
+      "manufacturerName": "Vornado",
+      "modelName": "",
+      "connectedVia": "Wi-Fi",
+      "isEnabled": true,
+      "endpointTypeId": "A1AZ0VKGUB06NH",
+      "capabilities": [
+        {
+          "capabilityType": "AVSInterfaceCapability",
+          "type": "AlexaInterface",
+          "version": "3",
+          "properties": {
+            "supported": [
+              {
+                "name": "powerState"
+              }
+            ],
+            "proactivelyReported": true,
+            "retrievable": true,
+            "readOnly": false
+          },
+          "interfaceName": "Alexa.PowerController"
+        },
+        {
+          "capabilityType": "AVSInterfaceCapability",
+          "type": "AlexaInterface",
+          "version": "3",
+          "properties": {
+            "supported": [
+              {
+                "name": "mode"
+              }
+            ],
+            "proactivelyReported": true,
+            "retrievable": true,
+            "readOnly": false
+          },
+          "configuration": {
+            "ordered": true,
+            "supportedModes": [
+              {
+                "value": "1",
+                "modeResources": {
+                  "friendlyNames": [
+                    {
+                      "value": {
+                        "text": "Exhaust",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "Outlet",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    }
+                  ]
+                }
+              },
+              {
+                "value": "2",
+                "modeResources": {
+                  "friendlyNames": [
+                    {
+                      "value": {
+                        "text": "Direct",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "inlet",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "resources": {
+            "friendlyNames": [
+              {
+                "value": {
+                  "text": "Direction",
+                  "locale": "en-US"
+                },
+                "@type": "text"
+              },
+              {
+                "value": {
+                  "text": "Wind",
+                  "locale": "en-US"
+                },
+                "@type": "text"
+              }
+            ]
+          },
+          "instance": "2",
+          "interfaceName": "Alexa.ModeController"
+        },
+        {
+          "capabilityType": "AVSInterfaceCapability",
+          "type": "AlexaInterface",
+          "version": "3",
+          "properties": {
+            "supported": [
+              {
+                "name": "rangeValue"
+              }
+            ],
+            "proactivelyReported": true,
+            "retrievable": true,
+            "readOnly": false
+          },
+          "configuration": {
+            "supportedRange": {
+              "minimumValue": 60.0,
+              "maximumValue": 90.0,
+              "precision": 1.0
+            },
+            "unitOfMeasure": "Alexa.Unit.Temperature.Degrees",
+            "presets": [
+              {
+                "rangeValue": 60.0,
+                "presetResources": {
+                  "friendlyNames": [
+                    {
+                      "value": {
+                        "text": "Low",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "Minimum",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "Min",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    }
+                  ]
+                }
+              },
+              {
+                "rangeValue": 70.0,
+                "presetResources": {
+                  "friendlyNames": [
+                    {
+                      "value": {
+                        "text": "Medium",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    }
+                  ]
+                }
+              },
+              {
+                "rangeValue": 80.0,
+                "presetResources": {
+                  "friendlyNames": [
+                    {
+                      "value": {
+                        "text": "High",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    }
+                  ]
+                }
+              },
+              {
+                "rangeValue": 90.0,
+                "presetResources": {
+                  "friendlyNames": [
+                    {
+                      "value": {
+                        "text": "Maximum",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "Max",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    }
+                  ]
+                }
+              }
+            ],
+            "unitOfMeasureLabel": {
+              "value": {
+                "assetId": "Alexa.Unit.Temperature.Degrees"
+              },
+              "@type": "asset"
+            }
+          },
+          "resources": {
+            "friendlyNames": [
+              {
+                "value": {
+                  "text": "Set Temperature",
+                  "locale": "en-US"
+                },
+                "@type": "text"
+              },
+              {
+                "value": {
+                  "text": "Temperature",
+                  "locale": "en-US"
+                },
+                "@type": "text"
+              }
+            ]
+          },
+          "instance": "3",
+          "interfaceName": "Alexa.RangeController"
+        },
+        {
+          "capabilityType": "AVSInterfaceCapability",
+          "type": "AlexaInterface",
+          "version": "3",
+          "properties": {
+            "supported": [
+              {
+                "name": "rangeValue"
+              }
+            ],
+            "proactivelyReported": true,
+            "retrievable": true,
+            "readOnly": true
+          },
+          "configuration": {
+            "supportedRange": {
+              "minimumValue": 0.0,
+              "maximumValue": 100.0,
+              "precision": 1.0
+            },
+            "unitOfMeasure": "Alexa.Unit.Temperature.Degrees",
+            "presets": [],
+            "unitOfMeasureLabel": {
+              "value": {
+                "assetId": "Alexa.Unit.Temperature.Degrees"
+              },
+              "@type": "asset"
+            }
+          },
+          "resources": {
+            "friendlyNames": [
+              {
+                "value": {
+                  "text": "Air Temperature",
+                  "locale": "en-US"
+                },
+                "@type": "text"
+              }
+            ]
+          },
+          "instance": "5",
+          "interfaceName": "Alexa.RangeController"
+        },
+        {
+          "capabilityType": "AVSInterfaceCapability",
+          "type": "AlexaInterface",
+          "version": "3",
+          "properties": {
+            "supported": [
+              {
+                "name": "connectivity"
+              }
+            ],
+            "proactivelyReported": true,
+            "retrievable": true,
+            "readOnly": false
+          },
+          "interfaceName": "Alexa.EndpointHealth"
+        },
+        {
+          "capabilityType": "AVSInterfaceCapability",
+          "type": "AlexaInterface",
+          "version": "3",
+          "properties": {
+            "supported": [
+              {
+                "name": "mode"
+              }
+            ],
+            "proactivelyReported": true,
+            "retrievable": true,
+            "readOnly": false
+          },
+          "configuration": {
+            "ordered": true,
+            "supportedModes": [
+              {
+                "value": "1",
+                "modeResources": {
+                  "friendlyNames": [
+                    {
+                      "value": {
+                        "text": "Low",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "Minimum",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "Min",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "Level One",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    }
+                  ]
+                }
+              },
+              {
+                "value": "2",
+                "modeResources": {
+                  "friendlyNames": [
+                    {
+                      "value": {
+                        "text": "Medium",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "Level Two",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    }
+                  ]
+                }
+              },
+              {
+                "value": "3",
+                "modeResources": {
+                  "friendlyNames": [
+                    {
+                      "value": {
+                        "text": "High",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "Level Three",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    }
+                  ]
+                }
+              },
+              {
+                "value": "4",
+                "modeResources": {
+                  "friendlyNames": [
+                    {
+                      "value": {
+                        "text": "Turbo",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "Level Four",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "Maximum",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    },
+                    {
+                      "value": {
+                        "text": "Max",
+                        "locale": "en-US"
+                      },
+                      "@type": "text"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "resources": {
+            "friendlyNames": [
+              {
+                "value": {
+                  "text": "Fan Speed",
+                  "locale": "en-US"
+                },
+                "@type": "text"
+              },
+              {
+                "value": {
+                  "text": "Speed",
+                  "locale": "en-US"
+                },
+                "@type": "text"
+              }
+            ]
+          },
+          "instance": "1",
+          "interfaceName": "Alexa.ModeController"
+        },
+        {
+          "capabilityType": "AVSInterfaceCapability",
+          "type": "AlexaInterface",
+          "version": "3",
+          "properties": {
+            "supported": [
+              {
+                "name": "toggleState"
+              }
+            ],
+            "proactivelyReported": true,
+            "retrievable": true,
+            "readOnly": false
+          },
+          "resources": {
+            "friendlyNames": [
+              {
+                "value": {
+                  "text": "Auto",
+                  "locale": "en-US"
+                },
+                "@type": "text"
+              },
+              {
+                "value": {
+                  "text": "Automatic",
+                  "locale": "en-US"
+                },
+                "@type": "text"
+              },
+              {
+                "value": {
+                  "text": "Autoclimate",
+                  "locale": "en-US"
+                },
+                "@type": "text"
+              }
+            ]
+          },
+          "instance": "4",
+          "interfaceName": "Alexa.ToggleController"
+        }
+      ]
+    }
+  },
+  "fan_state": {
+    "endpoint_id": "amzn1.alexa.endpoint.00000000-0000-4000-8000-000000000001",
+    "features": [
+      {
+        "name": "connectivity",
+        "instance": null,
+        "power_state": null,
+        "mode_value": null,
+        "range_value": null
+      },
+      {
+        "name": "power",
+        "instance": null,
+        "power_state": "OFF",
+        "mode_value": null,
+        "range_value": null
+      },
+      {
+        "name": "mode",
+        "instance": "1",
+        "power_state": null,
+        "mode_value": "0",
+        "range_value": null
+      },
+      {
+        "name": "mode",
+        "instance": "2",
+        "power_state": null,
+        "mode_value": "0",
+        "range_value": null
+      },
+      {
+        "name": "range",
+        "instance": "3",
+        "power_state": null,
+        "mode_value": null,
+        "range_value": 0.0
+      },
+      {
+        "name": "range",
+        "instance": "5",
+        "power_state": null,
+        "mode_value": null,
+        "range_value": 72.0
+      },
+      {
+        "name": "toggle",
+        "instance": "4",
+        "power_state": null,
+        "mode_value": null,
+        "range_value": null
+      },
+      {
+        "name": "endpointHealth",
+        "instance": null,
+        "power_state": null,
+        "mode_value": null,
+        "range_value": null
+      }
+    ]
+  }
+}

@@ -5,8 +5,9 @@ from __future__ import annotations
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .alexa.endpoints import entity_contract
 from .alexa.models import FanDevice
-from .const import DOMAIN, MANUFACTURER
+from .const import DOMAIN
 from .coordinator import VornadoTransomCoordinator
 
 
@@ -22,11 +23,12 @@ class VornadoTransomEntity(CoordinatorEntity[VornadoTransomCoordinator]):
         super().__init__(coordinator)
         self._appliance_key = appliance_key
         device = coordinator.data[appliance_key]
+        contract = entity_contract(device)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device.appliance_key)},
             name=device.name,
-            manufacturer=device.manufacturer or MANUFACTURER,
-            model=device.model or "Transom",
+            manufacturer=contract.manufacturer,
+            model=contract.model,
             serial_number=device.serial_number,
         )
 
