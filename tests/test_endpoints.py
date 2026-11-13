@@ -329,20 +329,6 @@ def test_climate_card_uses_a_reported_setpoint() -> None:
     assert endpoints.climate_target_temperature(device) == 72.0
 
 
-def test_climate_swing_mode_is_forward_or_reverse() -> None:
-    direct = endpoints.apply_fan_state(
-        _recorded(),
-        [CapabilityState(name="mode", instance="2", mode_value="2")],
-    )
-    exhaust = endpoints.apply_fan_state(
-        _recorded(),
-        [CapabilityState(name="mode", instance="2", mode_value="1")],
-    )
-    assert endpoints.climate_swing_mode(direct) == "forward"
-    assert endpoints.climate_swing_mode(exhaust) == "reverse"
-    assert endpoints.climate_swing_mode(_recorded()) is None
-
-
 def test_synthetic_fan_without_climate_controllers_has_no_auto_climate() -> None:
     """Climate features on a speed-only fan do not create auto state."""
     device = _template()

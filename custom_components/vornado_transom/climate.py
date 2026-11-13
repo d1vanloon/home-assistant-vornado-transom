@@ -15,18 +15,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .alexa.commands import (
-    SelectDirection,
-    SetClimateFanMode,
-    SetHvacAuto,
-    SetTargetTemperature,
-)
-from .alexa.endpoints import (
-    CLIMATE_FORWARD,
-    CLIMATE_REVERSE,
-    climate_swing_mode,
-    climate_target_temperature,
-)
+from .alexa.commands import SetClimateFanMode, SetHvacAuto, SetTargetTemperature
+from .alexa.endpoints import climate_target_temperature
 from .coordinator import VornadoTransomConfigEntry, VornadoTransomCoordinator
 from .entity import VornadoTransomEntity
 
@@ -50,6 +40,12 @@ class VornadoTransomClimate(VornadoTransomEntity, ClimateEntity):
 
     _attr_name = "Auto climate"
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.AUTO]
+    _attr_supported_features = (
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.FAN_MODE
+        | ClimateEntityFeature.TURN_ON
+        | ClimateEntityFeature.TURN_OFF
+    )
     # shortcut: Alexa reports Degrees; the recorded Transom reading 72 is Fahrenheit, upgrade if a fan reports Celsius
     _attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
 
@@ -68,21 +64,6 @@ class VornadoTransomClimate(VornadoTransomEntity, ClimateEntity):
         self._attr_precision = span.precision
         self._attr_target_temperature_step = span.precision
         self._attr_fan_modes = [mode.label for mode in self.device.controls.speed_modes]
-        if self.device.controls.direction is not None:
-            self._attr_swing_modes = [CLIMATE_FORWARD, CLIMATE_REVERSE]
-
-    @property
-    def supported_features(self) -> ClimateEntityFeature:
-        """Return climate features, including direction when the fan has it."""
-        features = (
-            ClimateEntityFeature.TARGET_TEMPERATURE
-            | ClimateEntityFeature.FAN_MODE
-            | ClimateEntityFeature.TURN_ON
-            | ClimateEntityFeature.TURN_OFF
-        )
-        if self.device.controls.direction is not None:
-            features |= ClimateEntityFeature.SWING_MODE
-        return features
 
     @property
     def hvac_mode(self) -> HVACMode | None:
@@ -102,11 +83,6 @@ class VornadoTransomClimate(VornadoTransomEntity, ClimateEntity):
     def target_temperature(self) -> float | None:
         """Return a numeric setpoint so the climate card can show the control."""
         return climate_target_temperature(self.device)
-
-    @property
-    def swing_mode(self) -> str | None:
-        """Return forward or reverse airflow."""
-        return climate_swing_mode(self.device)
 
     @property
     def fan_mode(self) -> str | None:
@@ -151,16 +127,4 @@ class VornadoTransomClimate(VornadoTransomEntity, ClimateEntity):
         """Set the speed used while auto climate is on."""
         await self.coordinator.async_command(
             self._appliance_key, SetClimateFanMode(fan_mode)
-        )
-
-    async def async_set_swing_mode(self, swing_mode: str) -> None:
-        """Set airflow direction. Home Assistant labels this control swing mode."""
-        if swing_mode == CLIMATE_FORWARD:
-            reverse = False
-        elif swing_mode == CLIMATE_REVERSE:
-            reverse = True
-        else:
-            raise HomeAssistantError(f"Invalid direction: {swing_mode}")
-        await self.coordinator.async_command(
-            self._appliance_key, SelectDirection(reverse)
         )

@@ -226,10 +226,6 @@ def fold_poll(
     return apply_fan_state(template if cached is None else cached, states)
 
 
-CLIMATE_FORWARD = "forward"
-CLIMATE_REVERSE = "reverse"
-
-
 def climate_target_temperature(device: FanDevice) -> float | None:
     """Temperature the climate card can render.
 
@@ -243,18 +239,6 @@ def climate_target_temperature(device: FanDevice) -> float | None:
     if device.target_temperature is not None:
         return device.target_temperature
     return climate.set_temperature_range.minimum
-
-
-def climate_swing_mode(device: FanDevice) -> str | None:
-    """Forward or reverse for the climate card, from the direction controller."""
-    direction = device.controls.direction
-    if direction is None or not device.direction_mode:
-        return None
-    if device.direction_mode == direction.direct_mode.alexa_mode:
-        return CLIMATE_FORWARD
-    if device.direction_mode == direction.exhaust_mode.alexa_mode:
-        return CLIMATE_REVERSE
-    return None
 
 
 @dataclass(frozen=True)
