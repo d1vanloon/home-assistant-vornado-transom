@@ -44,10 +44,11 @@ class CommandGate:
             for write in writes:
                 try:
                     await send(write)
+                except asyncio.CancelledError:
+                    self._keep(appliance_key, read, succeeded, publish)
+                    raise
                 except failures:
-                    if succeeded:
-                        publish(apply_fan_state(read(), expected_states(succeeded)))
-                        self._bump(appliance_key)
+                    self._keep(appliance_key, read, succeeded, publish)
                     raise
                 succeeded.append(write)
             publish(apply_fan_state(read(), expected_states(succeeded)))
@@ -69,6 +70,18 @@ class CommandGate:
                 else:
                     merged[key] = device
             return merged
+
+    def _keep(
+        self,
+        appliance_key: str,
+        read: ReadDevice,
+        succeeded: list[FeatureWrite],
+        publish: PublishDevice,
+    ) -> None:
+        if not succeeded:
+            return
+        publish(apply_fan_state(read(), expected_states(succeeded)))
+        self._bump(appliance_key)
 
     def _bump(self, appliance_key: str) -> None:
         self._epochs[appliance_key] = self.epoch(appliance_key) + 1

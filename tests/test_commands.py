@@ -149,6 +149,18 @@ def test_set_target_rejects_off_grid_and_out_of_range(value: float) -> None:
         commands.plan(_device(), commands.SetTargetTemperature(value))
 
 
+def test_target_with_hvac_off_is_rejected_before_any_write() -> None:
+    """A temperature request that also asks for off does not turn the fan on."""
+    device = _device(power="OFF", auto_on=False)
+    with pytest.raises(commands.CommandRejected, match="off"):
+        commands.plan(device, commands.SetTargetTemperature(72, "off"))
+    assert commands.plan(device, commands.SetTargetTemperature(72, "auto")) == (
+        commands.PowerWrite(True),
+        commands.ToggleWrite("4", True),
+        commands.RangeWrite("3", 72.0),
+    )
+
+
 def test_set_target_requires_climate_controls() -> None:
     with pytest.raises(commands.CommandRejected):
         commands.plan(_device(climate=False), commands.SetTargetTemperature(72))
@@ -329,6 +341,39 @@ def test_a_poll_started_before_a_command_keeps_the_command() -> None:
             lambda key: device,
         )
         assert current["abc123"].air_temperature == 70.0
+
+    asyncio.run(scenario())
+
+
+def test_cancellation_publishes_writes_that_finished() -> None:
+    """Cancelling a later write keeps the earlier ones and blocks a stale poll."""
+
+    async def scenario() -> None:
+        gate = execution.CommandGate()
+        device = _device(power="OFF", auto_on=False)
+        started = {"abc123": gate.epoch("abc123")}
+        published: list = []
+
+        async def send(write: object) -> None:
+            if isinstance(write, commands.RangeWrite):
+                raise asyncio.CancelledError
+
+        with pytest.raises(asyncio.CancelledError):
+            await gate.run(
+                "abc123",
+                lambda: device,
+                commands.SetTargetTemperature(72),
+                send,
+                published.append,
+            )
+        assert published[0].power == "ON"
+        assert published[0].auto_on is True
+        stale = _device(power="OFF", auto_on=None)
+        merged = await gate.merge_poll(
+            started, {"abc123": stale}, lambda key: published[0]
+        )
+        assert merged["abc123"].auto_on is True
+        assert merged["abc123"].power == "ON"
 
     asyncio.run(scenario())
 

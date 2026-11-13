@@ -59,9 +59,15 @@ class SetClimateFanMode:
 
 @dataclass(frozen=True)
 class SetTargetTemperature:
-    """Set the auto-mode target temperature."""
+    """Set the auto-mode target temperature.
+
+    hvac_mode is set when the climate service sent one. None keeps the
+    temperature-only behavior, which turns auto on. Any other mode is rejected
+    before a write.
+    """
 
     value: float
+    hvac_mode: str | None = None
 
 
 type Intent = (
@@ -134,7 +140,11 @@ def plan(device: FanDevice, intent: Intent) -> tuple[FeatureWrite, ...]:
             if device.auto_on is not True:
                 raise CommandRejected("Auto climate is off")
             return _speed_writes(device, label)
-        case SetTargetTemperature(value):
+        case SetTargetTemperature(value, hvac_mode):
+            if hvac_mode not in (None, "auto"):
+                raise CommandRejected(
+                    f"Target temperature cannot be set while HVAC mode is {hvac_mode}"
+                )
             return _target_writes(device, value)
     raise CommandRejected(f"Unknown intent: {intent!r}")
 
@@ -251,6 +261,13 @@ def _setpoint(value: float, span: TemperatureRange) -> float | None:
     except (TypeError, ValueError):
         return None
     if not math.isfinite(number):
+        return None
+    if not (
+        math.isfinite(span.minimum)
+        and math.isfinite(span.maximum)
+        and math.isfinite(span.precision)
+        and span.precision > 0
+    ):
         return None
     if number < span.minimum or number > span.maximum:
         return None
