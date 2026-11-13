@@ -119,6 +119,7 @@ def test_apply_fan_state_reads_power_speed_and_direction() -> None:
             CapabilityState(name="power", power_state="ON"),
             CapabilityState(name="mode", instance="1", mode_value="Speed.High"),
             CapabilityState(name="mode", instance="2", mode_value="Direction.Exhaust"),
+            CapabilityState(name="range", instance="5", range_value=72.0),
             CapabilityState(name="toggle", instance="9", power_state="OFF"),
         ],
     )
@@ -127,6 +128,7 @@ def test_apply_fan_state_reads_power_speed_and_direction() -> None:
         "Speed.High",
         "Direction.Exhaust",
     )
+    assert device.air_temperature is None
     assert device.available is True
 
 
@@ -184,3 +186,16 @@ def test_recorded_transom_matches_live_bindings() -> None:
     assert controls.direction.direct_mode.label == "Direct"
     assert controls.direction.exhaust_mode.alexa_mode == "1"
     assert controls.direction.exhaust_mode.label == "Exhaust"
+    assert controls.air_temperature_instance == "5"
+    device = endpoints.apply_fan_state(
+        verdict.device,
+        [
+            CapabilityState(
+                name=feature["name"],
+                instance=feature["instance"],
+                range_value=feature["range_value"],
+            )
+            for feature in fixture["fan_state"]["features"]
+        ],
+    )
+    assert device.air_temperature == 72.0

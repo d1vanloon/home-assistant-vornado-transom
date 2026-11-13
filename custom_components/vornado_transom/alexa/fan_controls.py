@@ -79,6 +79,15 @@ def match_mode_speed(capability: dict[str, Any]) -> bool:
     )
 
 
+def match_air_temperature(capability: dict[str, Any]) -> bool:
+    """Match a RangeController named Air Temperature."""
+    return (
+        capability.get("interfaceName") == "Alexa.RangeController"
+        and _has_instance(capability)
+        and _has_friendly_name(capability, ("air temperature",))
+    )
+
+
 def match_mode_direction(capability: dict[str, Any]) -> bool:
     """Match a Vornado Transom direction ModeController."""
     configuration = _as_dict(capability.get("configuration"))
@@ -203,6 +212,7 @@ def discover_vornado_controls(capabilities: Any) -> tuple[FanControlMap | None, 
     """Discover fans that expose a 4-speed ModeController.
 
     A fan with no matching direction controller is returned as speed-only.
+    An Air Temperature range, when present, is recorded for the sensor.
     A matching direction controller that cannot build both modes rejects
     the whole capability list. The string is why discovery failed, or empty
     when a fan was found.
@@ -237,11 +247,15 @@ def discover_vornado_controls(capabilities: Any) -> tuple[FanControlMap | None, 
             exhaust_mode=exhaust_mode,
         )
 
+    air_cap = next((cap for cap in parsed if match_air_temperature(cap)), None)
     return (
         FanControlMap(
             speed_instance=str(speed_cap["instance"]),
             speed_modes=speed_modes,
             direction=direction,
+            air_temperature_instance=(
+                None if air_cap is None else str(air_cap["instance"])
+            ),
         ),
         "",
     )
