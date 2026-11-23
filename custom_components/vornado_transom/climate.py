@@ -21,6 +21,7 @@ from .alexa.commands import (
     SetClimateFanMode,
     SetTargetTemperature,
     climate_intent,
+    quantize_setpoint,
 )
 from .alexa.endpoints import (
     climate_fan_mode,
@@ -128,10 +129,16 @@ class VornadoTransomClimate(VornadoTransomEntity, ClimateEntity):
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             raise HomeAssistantError("No temperature provided")
+        climate = self.device.controls.auto_climate
+        if climate is None:
+            raise HomeAssistantError("This fan has no auto climate")
+        snapped = quantize_setpoint(temperature, climate.set_temperature_range)
+        if snapped is None:
+            raise HomeAssistantError(f"Invalid target temperature: {temperature}")
         mode = kwargs.get(ATTR_HVAC_MODE)
         await self.coordinator.async_command(
             self._appliance_key,
-            SetTargetTemperature(temperature, None if mode is None else str(mode)),
+            SetTargetTemperature(snapped, None if mode is None else str(mode)),
         )
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:

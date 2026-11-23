@@ -296,6 +296,38 @@ def _require_climate(device: FanDevice) -> AutoClimateControls:
     return climate
 
 
+def quantize_setpoint(value: float, span: TemperatureRange) -> float | None:
+    """Nearest in-range grid point for a climate target.
+
+    Home Assistant converts Celsius to Fahrenheit without rounding, so 22°C
+    arrives as 71.6. A value already on the grid is unchanged. A value outside
+    the range, or exactly halfway between steps, stays invalid.
+    """
+    exact = _setpoint(value, span)
+    if exact is not None:
+        return exact
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    if not (
+        math.isfinite(span.minimum)
+        and math.isfinite(span.maximum)
+        and math.isfinite(span.precision)
+        and span.precision > 0
+    ):
+        return None
+    if number < span.minimum or number > span.maximum:
+        return None
+    steps = (number - span.minimum) / span.precision
+    nearest = round(steps)
+    if abs(steps - nearest) >= 0.5 - 1e-9:
+        return None
+    return _setpoint(span.minimum + nearest * span.precision, span)
+
+
 def _setpoint(value: float, span: TemperatureRange) -> float | None:
     """Return value when it sits on the discovered grid, otherwise None."""
     try:

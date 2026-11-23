@@ -216,6 +216,23 @@ def test_set_target_rejects_off_grid_and_out_of_range(value: float) -> None:
         commands.plan(_device(), commands.SetTargetTemperature(value))
 
 
+def test_converted_celsius_target_snaps_onto_the_fahrenheit_grid() -> None:
+    """22°C is 71.6°F. The climate boundary rounds that onto the 1°F grid."""
+    span = models.TemperatureRange(60.0, 90.0, 1.0)
+    converted = 22 * 9 / 5 + 32
+    assert converted == 71.6
+    assert commands.quantize_setpoint(converted, span) == 72.0
+    assert commands.quantize_setpoint(21 * 9 / 5 + 32, span) == 70.0
+    assert commands.quantize_setpoint(72.0, span) == 72.0
+    assert commands.quantize_setpoint(72.5, span) is None
+    assert commands.quantize_setpoint(59, span) is None
+    assert commands.quantize_setpoint(90.4, span) is None
+    with pytest.raises(commands.CommandRejected):
+        commands.plan(_device(), commands.SetTargetTemperature(converted))
+    writes = commands.plan(_device(), commands.SetTargetTemperature(72.0))
+    assert writes[2] == commands.RangeWrite("3", 72.0)
+
+
 def test_target_with_hvac_off_is_rejected_before_any_write() -> None:
     """A temperature request that also asks for off does not turn the fan on."""
     device = _device(power="OFF", auto_on=False)
