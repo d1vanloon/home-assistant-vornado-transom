@@ -321,6 +321,33 @@ def test_climate_card_has_a_target_when_the_device_setpoint_is_unset() -> None:
     assert endpoints.climate_target_temperature(device) == 60.0
 
 
+@pytest.mark.parametrize(
+    ("auto_on", "power", "mode", "action"),
+    [
+        (True, "ON", "cool", "fan"),
+        (True, "OFF", "cool", "off"),
+        (True, None, "cool", None),
+        (False, "ON", "fan_only", "fan"),
+        (False, "OFF", "off", "off"),
+        (False, None, "off", None),
+        (None, "ON", None, "fan"),
+        (None, "OFF", None, "off"),
+        (None, None, None, None),
+    ],
+)
+def test_climate_mode_and_action_follow_auto_and_power(
+    auto_on: bool | None,
+    power: str | None,
+    mode: str | None,
+    action: str | None,
+) -> None:
+    device = _recorded()
+    device.auto_on = auto_on
+    device.power = power
+    assert endpoints.climate_hvac_mode(device) == mode
+    assert endpoints.climate_hvac_action(device) == action
+
+
 def test_climate_card_uses_a_reported_setpoint() -> None:
     device = endpoints.apply_fan_state(
         _recorded(),

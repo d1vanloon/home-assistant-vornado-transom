@@ -241,6 +241,26 @@ def climate_target_temperature(device: FanDevice) -> float | None:
     return climate.set_temperature_range.minimum
 
 
+def climate_hvac_mode(device: FanDevice) -> str | None:
+    """Return cool, fan_only, off, or None from auto and power."""
+    if device.auto_on is True:
+        return "cool"
+    if device.auto_on is False and device.power == "ON":
+        return "fan_only"
+    if device.auto_on is False:
+        return "off"
+    return None
+
+
+def climate_hvac_action(device: FanDevice) -> str | None:
+    """Return fan or off from power. The device has no separate running property."""
+    if device.power == "ON":
+        return "fan"
+    if device.power == "OFF":
+        return "off"
+    return None
+
+
 @dataclass(frozen=True)
 class DirectionModes:
     """Alexa mode values for forward and reverse airflow."""

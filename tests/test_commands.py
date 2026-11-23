@@ -100,24 +100,91 @@ def test_power_and_mode_requests_match_current_bodies() -> None:
     }
 
 
+def test_climate_intent_maps_cool_fan_only_and_off() -> None:
+    assert commands.climate_intent("cool") == commands.SetHvacCool()
+    assert commands.climate_intent("fan_only") == commands.SetHvacFanOnly()
+    assert commands.climate_intent("off") == commands.SetHvacOff()
+    with pytest.raises(commands.CommandRejected, match="auto"):
+        commands.climate_intent("auto")
+    with pytest.raises(commands.CommandRejected, match="heat"):
+        commands.climate_intent("heat")
+
+
 @pytest.mark.parametrize("auto_on", [False, None])
-def test_climate_off_sends_nothing_when_auto_is_not_on(auto_on: bool | None) -> None:
-    """Climate Off does not stop a fan that auto did not start."""
+def test_climate_off_stops_a_running_fan_when_auto_is_not_on(
+    auto_on: bool | None,
+) -> None:
     device = _device(power="ON", auto_on=auto_on)
-    assert commands.plan(device, commands.SetHvacAuto(False)) == ()
+    assert commands.plan(device, commands.SetHvacOff()) == (
+        commands.PowerWrite(False),
+    )
+
+
+@pytest.mark.parametrize("auto_on", [False, None])
+def test_climate_off_sends_nothing_when_the_fan_is_already_off(
+    auto_on: bool | None,
+) -> None:
+    device = _device(power="OFF", auto_on=auto_on)
+    assert commands.plan(device, commands.SetHvacOff()) == ()
+
+
+def test_climate_off_only_clears_auto_when_power_is_already_off() -> None:
+    device = _device(power="OFF", auto_on=True)
+    assert commands.plan(device, commands.SetHvacOff()) == (
+        commands.ToggleWrite("4", False),
+    )
 
 
 def test_climate_off_turns_toggle_off_then_power_off() -> None:
     device = _device(power="ON", auto_on=True)
-    assert commands.plan(device, commands.SetHvacAuto(False)) == (
+    assert commands.plan(device, commands.SetHvacOff()) == (
         commands.ToggleWrite("4", False),
         commands.PowerWrite(False),
     )
 
 
+def test_fan_only_disables_auto_and_leaves_the_fan_running() -> None:
+    running = _device(power="ON", auto_on=True)
+    assert commands.plan(running, commands.SetHvacFanOnly()) == (
+        commands.ToggleWrite("4", False),
+    )
+    stopped = _device(power="OFF", auto_on=True)
+    stopped_writes = commands.plan(stopped, commands.SetHvacFanOnly())
+    assert stopped_writes == (
+        commands.ToggleWrite("4", False),
+        commands.PowerWrite(True),
+    )
+    updated = endpoints.apply_fan_state(
+        stopped, commands.expected_states(stopped_writes)
+    )
+    assert (updated.auto_on, updated.power) == (False, "ON")
+    assert commands.plan(updated, commands.SetHvacFanOnly()) == ()
+
+
+def test_fan_only_from_manual_off_only_turns_power_on() -> None:
+    device = _device(power="OFF", auto_on=False)
+    assert commands.plan(device, commands.SetHvacFanOnly()) == (
+        commands.PowerWrite(True),
+    )
+    already = _device(power="ON", auto_on=False)
+    assert commands.plan(already, commands.SetHvacFanOnly()) == ()
+
+
+def test_fan_only_when_auto_is_unknown_turns_the_toggle_off() -> None:
+    device = _device(power="ON", auto_on=None)
+    assert commands.plan(device, commands.SetHvacFanOnly()) == (
+        commands.ToggleWrite("4", False),
+    )
+
+
+def test_fan_only_requires_climate_controls() -> None:
+    with pytest.raises(commands.CommandRejected):
+        commands.plan(_device(climate=False), commands.SetHvacFanOnly())
+
+
 def test_climate_auto_turns_power_on_then_toggle_on() -> None:
     device = _device(power="ON", auto_on=True)
-    assert commands.plan(device, commands.SetHvacAuto(True)) == (
+    assert commands.plan(device, commands.SetHvacCool()) == (
         commands.PowerWrite(True),
         commands.ToggleWrite("4", True),
     )
@@ -154,7 +221,11 @@ def test_target_with_hvac_off_is_rejected_before_any_write() -> None:
     device = _device(power="OFF", auto_on=False)
     with pytest.raises(commands.CommandRejected, match="off"):
         commands.plan(device, commands.SetTargetTemperature(72, "off"))
-    assert commands.plan(device, commands.SetTargetTemperature(72, "auto")) == (
+    with pytest.raises(commands.CommandRejected, match="auto"):
+        commands.plan(device, commands.SetTargetTemperature(72, "auto"))
+    with pytest.raises(commands.CommandRejected, match="fan_only"):
+        commands.plan(device, commands.SetTargetTemperature(72, "fan_only"))
+    assert commands.plan(device, commands.SetTargetTemperature(72, "cool")) == (
         commands.PowerWrite(True),
         commands.ToggleWrite("4", True),
         commands.RangeWrite("3", 72.0),
@@ -218,7 +289,7 @@ def test_empty_climate_off_does_not_publish() -> None:
         execution.CommandGate().run(
             "abc123",
             lambda: device,
-            commands.SetHvacAuto(False),
+            commands.SetHvacOff(),
             send,
             published.append,
         )
@@ -269,7 +340,7 @@ def test_a_failed_first_write_publishes_nothing() -> None:
             execution.CommandGate().run(
                 "abc123",
                 lambda: device,
-                commands.SetHvacAuto(True),
+                commands.SetHvacCool(),
                 send,
                 published.append,
             )
@@ -324,7 +395,7 @@ def test_a_poll_started_before_a_command_keeps_the_command() -> None:
         await gate.run(
             "abc123",
             lambda: device,
-            commands.SetHvacAuto(True),
+            commands.SetHvacCool(),
             send,
             publish,
         )
@@ -401,7 +472,7 @@ def test_commands_for_one_fan_run_one_at_a_time() -> None:
             await lane.run(
                 "abc123",
                 lambda: device,
-                commands.SetHvacAuto(True),
+                commands.SetHvacCool(),
                 send,
                 publish,
             )
@@ -411,7 +482,7 @@ def test_commands_for_one_fan_run_one_at_a_time() -> None:
             await lane.run(
                 "abc123",
                 lambda: device,
-                commands.SetHvacAuto(False),
+                commands.SetHvacOff(),
                 send,
                 publish,
             )

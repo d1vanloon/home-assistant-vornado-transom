@@ -44,10 +44,18 @@ class SelectDirection:
 
 
 @dataclass(frozen=True)
-class SetHvacAuto:
-    """Turn the device's auto mode on or off."""
+class SetHvacCool:
+    """Turn power on and enable auto."""
 
-    on: bool
+
+@dataclass(frozen=True)
+class SetHvacOff:
+    """Turn power off, and turn auto off when it is on."""
+
+
+@dataclass(frozen=True)
+class SetHvacFanOnly:
+    """Turn auto off and leave the fan powered on."""
 
 
 @dataclass(frozen=True)
@@ -61,7 +69,7 @@ class SetClimateFanMode:
 class SetTargetTemperature:
     """Set the auto-mode target temperature.
 
-    hvac_mode is set when the climate service sent one. None keeps the
+    hvac_mode is set when the climate service sent one. None and cool keep the
     temperature-only behavior, which turns auto on. Any other mode is rejected
     before a write.
     """
@@ -75,7 +83,9 @@ type Intent = (
     | TurnOff
     | SelectSpeed
     | SelectDirection
-    | SetHvacAuto
+    | SetHvacCool
+    | SetHvacOff
+    | SetHvacFanOnly
     | SetClimateFanMode
     | SetTargetTemperature
 )
@@ -119,6 +129,17 @@ class CommandRejected(Exception):
     """The intent is invalid for this device. Nothing was sent."""
 
 
+def climate_intent(hvac_mode: str) -> Intent:
+    """Return the climate intent for one HVAC mode string."""
+    if hvac_mode == "cool":
+        return SetHvacCool()
+    if hvac_mode == "fan_only":
+        return SetHvacFanOnly()
+    if hvac_mode == "off":
+        return SetHvacOff()
+    raise CommandRejected(f"Unsupported HVAC mode: {hvac_mode}")
+
+
 def plan(device: FanDevice, intent: Intent) -> tuple[FeatureWrite, ...]:
     """Return the absolute writes for one intent, in send order."""
     match intent:
@@ -134,14 +155,18 @@ def plan(device: FanDevice, intent: Intent) -> tuple[FeatureWrite, ...]:
                 raise CommandRejected("This fan does not support airflow direction")
             binding = direction.exhaust_mode if reverse else direction.direct_mode
             return (ModeWrite(binding.instance, binding.alexa_mode),)
-        case SetHvacAuto(on):
-            return _auto_writes(device, on)
+        case SetHvacCool():
+            return _cool_writes(device)
+        case SetHvacOff():
+            return _off_writes(device)
+        case SetHvacFanOnly():
+            return _fan_only_writes(device)
         case SetClimateFanMode(label):
             if device.auto_on is not True:
                 raise CommandRejected("Auto climate is off")
             return _speed_writes(device, label)
         case SetTargetTemperature(value, hvac_mode):
-            if hvac_mode not in (None, "auto"):
+            if hvac_mode not in (None, "cool"):
                 raise CommandRejected(
                     f"Target temperature cannot be set while HVAC mode is {hvac_mode}"
                 )
@@ -226,13 +251,29 @@ def _speed_writes(device: FanDevice, label: str) -> tuple[FeatureWrite, ...]:
     return tuple(writes)
 
 
-def _auto_writes(device: FanDevice, on: bool) -> tuple[FeatureWrite, ...]:
-    if not on and device.auto_on is not True:
-        return ()
+def _cool_writes(device: FanDevice) -> tuple[FeatureWrite, ...]:
     climate = _require_climate(device)
-    if on:
-        return (PowerWrite(True), ToggleWrite(climate.toggle_instance, True))
-    return (ToggleWrite(climate.toggle_instance, False), PowerWrite(False))
+    return (PowerWrite(True), ToggleWrite(climate.toggle_instance, True))
+
+
+def _off_writes(device: FanDevice) -> tuple[FeatureWrite, ...]:
+    climate = _require_climate(device)
+    writes: list[FeatureWrite] = []
+    if device.auto_on is True:
+        writes.append(ToggleWrite(climate.toggle_instance, False))
+    if device.power != "OFF":
+        writes.append(PowerWrite(False))
+    return tuple(writes)
+
+
+def _fan_only_writes(device: FanDevice) -> tuple[FeatureWrite, ...]:
+    climate = _require_climate(device)
+    writes: list[FeatureWrite] = []
+    if device.auto_on is not False:
+        writes.append(ToggleWrite(climate.toggle_instance, False))
+    if device.power != "ON":
+        writes.append(PowerWrite(True))
+    return tuple(writes)
 
 
 def _target_writes(device: FanDevice, value: float) -> tuple[FeatureWrite, ...]:

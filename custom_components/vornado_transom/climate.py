@@ -8,6 +8,7 @@ from homeassistant.components.climate import (
     ATTR_HVAC_MODE,
     ClimateEntity,
     ClimateEntityFeature,
+    HVACAction,
     HVACMode,
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
@@ -15,8 +16,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .alexa.commands import SetClimateFanMode, SetHvacAuto, SetTargetTemperature
-from .alexa.endpoints import climate_target_temperature
+from .alexa.commands import (
+    CommandRejected,
+    SetClimateFanMode,
+    SetTargetTemperature,
+    climate_intent,
+)
+from .alexa.endpoints import (
+    climate_hvac_action,
+    climate_hvac_mode,
+    climate_target_temperature,
+)
 from .coordinator import VornadoTransomConfigEntry, VornadoTransomCoordinator
 from .entity import VornadoTransomEntity
 
@@ -39,7 +49,7 @@ class VornadoTransomClimate(VornadoTransomEntity, ClimateEntity):
     """The fan's auto mode, shown as a thermostat."""
 
     _attr_name = "Auto climate"
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.AUTO]
+    _attr_hvac_modes = (HVACMode.OFF, HVACMode.COOL, HVACMode.FAN_ONLY)
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.FAN_MODE
@@ -67,12 +77,19 @@ class VornadoTransomClimate(VornadoTransomEntity, ClimateEntity):
 
     @property
     def hvac_mode(self) -> HVACMode | None:
-        """Return auto or off from the auto toggle alone."""
-        if self.device.auto_on is True:
-            return HVACMode.AUTO
-        if self.device.auto_on is False:
-            return HVACMode.OFF
-        return None
+        """Cool when auto is on, fan only when the fan runs with auto off."""
+        mode = climate_hvac_mode(self.device)
+        if mode is None:
+            return None
+        return HVACMode(mode)
+
+    @property
+    def hvac_action(self) -> HVACAction | None:
+        """Fan while power is on. The device has no separate running flag."""
+        action = climate_hvac_action(self.device)
+        if action is None:
+            return None
+        return HVACAction(action)
 
     @property
     def current_temperature(self) -> float | None:
@@ -95,21 +112,19 @@ class VornadoTransomClimate(VornadoTransomEntity, ClimateEntity):
         return None
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        """Set auto climate on or off."""
-        if hvac_mode == HVACMode.AUTO:
-            on = True
-        elif hvac_mode == HVACMode.OFF:
-            on = False
-        else:
-            raise HomeAssistantError(f"Unsupported HVAC mode: {hvac_mode}")
-        await self.coordinator.async_command(self._appliance_key, SetHvacAuto(on))
+        """Cool enables auto. Fan only runs the fan with auto off. Off powers it off."""
+        try:
+            intent = climate_intent(str(hvac_mode))
+        except CommandRejected as err:
+            raise HomeAssistantError(str(err)) from err
+        await self.coordinator.async_command(self._appliance_key, intent)
 
     async def async_turn_on(self) -> None:
-        """Turn auto climate on."""
-        await self.async_set_hvac_mode(HVACMode.AUTO)
+        """Turn the thermostat on."""
+        await self.async_set_hvac_mode(HVACMode.COOL)
 
     async def async_turn_off(self) -> None:
-        """Turn auto climate off."""
+        """Turn the fan off."""
         await self.async_set_hvac_mode(HVACMode.OFF)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
