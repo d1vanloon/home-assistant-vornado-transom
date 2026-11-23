@@ -23,6 +23,7 @@ from .alexa.commands import (
     climate_intent,
 )
 from .alexa.endpoints import (
+    climate_fan_mode,
     climate_hvac_action,
     climate_hvac_mode,
     climate_target_temperature,
@@ -103,13 +104,8 @@ class VornadoTransomClimate(VornadoTransomEntity, ClimateEntity):
 
     @property
     def fan_mode(self) -> str | None:
-        """Return the label for the current speed."""
-        if not self.device.speed_mode:
-            return None
-        for binding in self.device.controls.speed_modes:
-            if binding.alexa_mode == self.device.speed_mode:
-                return binding.label
-        return None
+        """Return the current speed in cool and in fan only."""
+        return climate_fan_mode(self.device)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Cool enables auto. Fan only runs the fan with auto off. Off powers it off."""
@@ -139,7 +135,7 @@ class VornadoTransomClimate(VornadoTransomEntity, ClimateEntity):
         )
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
-        """Set the speed used while auto climate is on."""
+        """Set the speed while cool or fan only is active."""
         await self.coordinator.async_command(
             self._appliance_key, SetClimateFanMode(fan_mode)
         )

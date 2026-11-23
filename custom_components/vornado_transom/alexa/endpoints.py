@@ -252,6 +252,16 @@ def climate_hvac_mode(device: FanDevice) -> str | None:
     return None
 
 
+def climate_fan_mode(device: FanDevice) -> str | None:
+    """Return the current speed label. Auto does not hide it."""
+    if not device.speed_mode:
+        return None
+    for binding in device.controls.speed_modes:
+        if binding.alexa_mode == device.speed_mode:
+            return binding.label
+    return None
+
+
 def climate_hvac_action(device: FanDevice) -> str | None:
     """Return fan or off from power. The device has no separate running property."""
     if device.power == "ON":

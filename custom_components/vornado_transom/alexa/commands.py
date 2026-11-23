@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
+from .endpoints import climate_hvac_mode
 from .models import (
     AutoClimateControls,
     CapabilityState,
@@ -60,7 +61,7 @@ class SetHvacFanOnly:
 
 @dataclass(frozen=True)
 class SetClimateFanMode:
-    """Select a speed label while auto is already on."""
+    """Select a speed label while cool or fan only is active."""
 
     label: str
 
@@ -162,8 +163,8 @@ def plan(device: FanDevice, intent: Intent) -> tuple[FeatureWrite, ...]:
         case SetHvacFanOnly():
             return _fan_only_writes(device)
         case SetClimateFanMode(label):
-            if device.auto_on is not True:
-                raise CommandRejected("Auto climate is off")
+            if climate_hvac_mode(device) not in ("cool", "fan_only"):
+                raise CommandRejected("Climate is off")
             return _speed_writes(device, label)
         case SetTargetTemperature(value, hvac_mode):
             if hvac_mode not in (None, "cool"):

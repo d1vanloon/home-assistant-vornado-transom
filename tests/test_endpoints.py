@@ -348,6 +348,19 @@ def test_climate_mode_and_action_follow_auto_and_power(
     assert endpoints.climate_hvac_action(device) == action
 
 
+def test_climate_speed_stays_visible_when_auto_is_off() -> None:
+    device = _recorded()
+    device.speed_mode = "3"
+    device.auto_on = False
+    device.power = "ON"
+    assert endpoints.climate_hvac_mode(device) == "fan_only"
+    assert endpoints.climate_fan_mode(device) == "High"
+    device.auto_on = True
+    assert endpoints.climate_fan_mode(device) == "High"
+    device.speed_mode = None
+    assert endpoints.climate_fan_mode(device) is None
+
+
 def test_climate_card_uses_a_reported_setpoint() -> None:
     device = endpoints.apply_fan_state(
         _recorded(),

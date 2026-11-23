@@ -237,25 +237,34 @@ def test_set_target_requires_climate_controls() -> None:
         commands.plan(_device(climate=False), commands.SetTargetTemperature(72))
 
 
-@pytest.mark.parametrize("auto_on", [False, None])
-def test_climate_fan_mode_rejected_when_auto_is_not_on(auto_on: bool | None) -> None:
-    device = _device(power="ON", auto_on=auto_on)
-    with pytest.raises(commands.CommandRejected):
+@pytest.mark.parametrize(
+    ("power", "auto_on"),
+    [("OFF", False), ("OFF", None), ("ON", None)],
+)
+def test_climate_fan_mode_rejected_when_climate_is_off(
+    power: str, auto_on: bool | None
+) -> None:
+    device = _device(power=power, auto_on=auto_on)
+    with pytest.raises(commands.CommandRejected, match="off"):
         commands.plan(device, commands.SetClimateFanMode("High"))
 
 
-def test_climate_fan_mode_while_auto_is_on_uses_the_fan_preset_sequence() -> None:
-    device = _device(power="OFF", auto_on=True)
-    assert commands.plan(device, commands.SetClimateFanMode("High")) == (
+def test_climate_fan_mode_in_cool_or_fan_only_sets_speed() -> None:
+    cool_stopped = _device(power="OFF", auto_on=True)
+    assert commands.plan(cool_stopped, commands.SetClimateFanMode("High")) == (
         commands.PowerWrite(True),
         commands.ModeWrite("1", "3"),
     )
-    already_on = _device(power="ON", auto_on=True)
-    assert commands.plan(already_on, commands.SetClimateFanMode("High")) == (
+    cool_running = _device(power="ON", auto_on=True)
+    assert commands.plan(cool_running, commands.SetClimateFanMode("High")) == (
+        commands.ModeWrite("1", "3"),
+    )
+    fan_only = _device(power="ON", auto_on=False)
+    assert commands.plan(fan_only, commands.SetClimateFanMode("High")) == (
         commands.ModeWrite("1", "3"),
     )
     with pytest.raises(commands.CommandRejected):
-        commands.plan(already_on, commands.SetClimateFanMode("Blast"))
+        commands.plan(fan_only, commands.SetClimateFanMode("Blast"))
 
 
 def test_fan_preset_while_off_turns_power_on_then_sets_speed() -> None:
