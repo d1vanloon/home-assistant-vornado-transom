@@ -120,6 +120,7 @@ class FeatureRole(StrEnum):
     POWER = "power"
     SPEED = "speed"
     DIRECTION = "direction"
+    AIR_TEMPERATURE = "air_temperature"
     IGNORED = "ignored"
 
 
@@ -132,6 +133,12 @@ def feature_role(controls: FanControlMap, state: CapabilityState) -> FeatureRole
             return FeatureRole.SPEED
         if controls.direction is not None and state.instance == controls.direction.instance:
             return FeatureRole.DIRECTION
+    if (
+        state.name == "range"
+        and controls.air_temperature_instance is not None
+        and state.instance == controls.air_temperature_instance
+    ):
+        return FeatureRole.AIR_TEMPERATURE
     return FeatureRole.IGNORED
 
 
@@ -140,6 +147,7 @@ def apply_fan_state(device: FanDevice, states: Iterable[CapabilityState]) -> Fan
     power = device.power
     speed_mode = device.speed_mode
     direction_mode = device.direction_mode
+    air_temperature = device.air_temperature
     for state in states:
         match feature_role(device.controls, state):
             case FeatureRole.POWER if state.power_state is not None:
@@ -148,11 +156,14 @@ def apply_fan_state(device: FanDevice, states: Iterable[CapabilityState]) -> Fan
                 speed_mode = state.mode_value
             case FeatureRole.DIRECTION if state.mode_value is not None:
                 direction_mode = state.mode_value
+            case FeatureRole.AIR_TEMPERATURE if state.range_value is not None:
+                air_temperature = state.range_value
     return replace(
         device,
         power=power,
         speed_mode=speed_mode,
         direction_mode=direction_mode,
+        air_temperature=air_temperature,
         available=True,
     )
 

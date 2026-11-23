@@ -39,6 +39,7 @@ class FanControlMap:
     speed_instance: str
     speed_modes: tuple[ModeBinding, ...]
     direction: DirectionControls | None = None
+    air_temperature_instance: str | None = None
 
 
 @dataclass
@@ -66,4 +67,5 @@ class FanDevice:
     power: str | None = None
     speed_mode: str | None = None
     direction_mode: str | None = None
+    air_temperature: float | None = None
     available: bool = True
