@@ -9,7 +9,13 @@ from typing import Any
 
 from ..const import MANUFACTURER
 from .fan_controls import discover_vornado_controls, parse_capabilities
-from .models import CapabilityState, FanControlMap, FanDevice
+from .models import (
+    CapabilityState,
+    ClimatePhase,
+    FanControlMap,
+    FanDevice,
+    climate_phase,
+)
 
 ENDPOINT_PREFIX = "amzn1.alexa.endpoint."
 DEFAULT_MODEL = "Transom"
@@ -241,18 +247,15 @@ def climate_target_temperature(device: FanDevice) -> float | None:
     return climate.set_temperature_range.minimum
 
 
-def climate_hvac_mode(device: FanDevice) -> str | None:
+def climate_hvac_mode(device: FanDevice) -> ClimatePhase | None:
     """Return cool, fan_only, off, or None from auto and power."""
-    if device.auto_on is True:
-        return "cool"
-    if device.auto_on is False and device.power == "ON":
-        return "fan_only"
-    if device.auto_on is False:
-        return "off"
-    return None
+    phase = climate_phase(device)
+    if phase is ClimatePhase.UNKNOWN:
+        return None
+    return phase
 
 
-def climate_fan_mode(device: FanDevice) -> str | None:
+def speed_label(device: FanDevice) -> str | None:
     """Return the current speed label. Auto does not hide it."""
     if not device.speed_mode:
         return None
@@ -272,14 +275,6 @@ def climate_hvac_action(device: FanDevice) -> str | None:
 
 
 @dataclass(frozen=True)
-class DirectionModes:
-    """Alexa mode values for forward and reverse airflow."""
-
-    direct: str
-    exhaust: str
-
-
-@dataclass(frozen=True)
 class EntityContract:
     """What Home Assistant shows for a kept fan, before any polling."""
 
@@ -287,23 +282,13 @@ class EntityContract:
     manufacturer: str
     model: str
     preset_modes: tuple[str, ...]
-    direction_modes: DirectionModes | None
 
 
 def entity_contract(device: FanDevice) -> EntityContract:
     """Project a FanDevice onto the Home Assistant entity and device facts."""
-    direction = device.controls.direction
     return EntityContract(
         unique_id=f"{device.appliance_key}_fan",
         manufacturer=device.manufacturer or MANUFACTURER,
         model=device.model or DEFAULT_MODEL,
         preset_modes=tuple(mode.label for mode in device.controls.speed_modes),
-        direction_modes=(
-            None
-            if direction is None
-            else DirectionModes(
-                direction.direct_mode.alexa_mode,
-                direction.exhaust_mode.alexa_mode,
-            )
-        ),
     )

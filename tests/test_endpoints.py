@@ -161,9 +161,6 @@ def test_entity_contract_falls_back_to_vornado_transom() -> None:
     assert contract.model == "Transom"
     assert contract.unique_id == "abc123_fan"
     assert contract.preset_modes == ("Low", "Medium", "High", "Turbo")
-    assert contract.direction_modes == endpoints.DirectionModes(
-        "Direction.Direct", "Direction.Exhaust"
-    )
 
 
 def test_recorded_transom_matches_live_bindings() -> None:
@@ -354,11 +351,11 @@ def test_climate_speed_stays_visible_when_auto_is_off() -> None:
     device.auto_on = False
     device.power = "ON"
     assert endpoints.climate_hvac_mode(device) == "fan_only"
-    assert endpoints.climate_fan_mode(device) == "High"
+    assert endpoints.speed_label(device) == "High"
     device.auto_on = True
-    assert endpoints.climate_fan_mode(device) == "High"
+    assert endpoints.speed_label(device) == "High"
     device.speed_mode = None
-    assert endpoints.climate_fan_mode(device) is None
+    assert endpoints.speed_label(device) is None
 
 
 def test_climate_card_uses_a_reported_setpoint() -> None:

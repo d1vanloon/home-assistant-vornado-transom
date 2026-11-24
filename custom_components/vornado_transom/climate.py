@@ -24,10 +24,10 @@ from .alexa.commands import (
     quantize_setpoint,
 )
 from .alexa.endpoints import (
-    climate_fan_mode,
     climate_hvac_action,
     climate_hvac_mode,
     climate_target_temperature,
+    speed_label,
 )
 from .coordinator import VornadoTransomConfigEntry, VornadoTransomCoordinator
 from .entity import VornadoTransomEntity
@@ -106,7 +106,7 @@ class VornadoTransomClimate(VornadoTransomEntity, ClimateEntity):
     @property
     def fan_mode(self) -> str | None:
         """Return the current speed in cool and in fan only."""
-        return climate_fan_mode(self.device)
+        return speed_label(self.device)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Cool enables auto. Fan only runs the fan with auto off. Off powers it off."""
