@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 
 class AlexaApiError(Exception):
@@ -73,6 +74,19 @@ class CapabilityState:
     toggle_enabled: bool | None = None
 
 
+class ClimatePhase(StrEnum):
+    """HVAC mode derived from auto and power.
+
+    Unknown auto is its own phase. The Home Assistant projection turns that
+    phase into None. Auto on is cool even when power is off.
+    """
+
+    COOL = "cool"
+    FAN_ONLY = "fan_only"
+    OFF = "off"
+    UNKNOWN = "unknown"
+
+
 @dataclass
 class FanDevice:
     """A discovered Vornado Transom-compatible fan endpoint."""
@@ -91,3 +105,14 @@ class FanDevice:
     auto_on: bool | None = None
     target_temperature: float | None = None
     available: bool = True
+
+
+def climate_phase(device: FanDevice) -> ClimatePhase:
+    """Map auto and power to one climate phase."""
+    if device.auto_on is True:
+        return ClimatePhase.COOL
+    if device.auto_on is False and device.power == "ON":
+        return ClimatePhase.FAN_ONLY
+    if device.auto_on is False:
+        return ClimatePhase.OFF
+    return ClimatePhase.UNKNOWN

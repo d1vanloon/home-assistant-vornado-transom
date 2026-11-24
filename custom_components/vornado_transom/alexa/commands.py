@@ -5,14 +5,15 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
-from .endpoints import climate_hvac_mode
 from .models import (
-    AutoClimateControls,
     CapabilityState,
+    ClimatePhase,
     FanDevice,
     TemperatureRange,
+    climate_phase,
 )
 
 # Inferred. SetRangeValue's payload key matches the polled rangeValue property;
@@ -126,53 +127,108 @@ class RangeWrite:
 type FeatureWrite = PowerWrite | ModeWrite | ToggleWrite | RangeWrite
 
 
+class Step(StrEnum):
+    """One absolute write, in the order a policy lists it.
+
+    AUTO_OFF_UNLESS_FALSE also sends when auto is unknown.
+    AUTO_OFF_ONLY_IF_TRUE does not.
+    POWER_ON and AUTO_ON always send. They do not look at the current value.
+    """
+
+    POWER_ON = "power_on"
+    POWER_OFF = "power_off"
+    POWER_ON_UNLESS_ON = "power_on_unless_on"
+    POWER_OFF_UNLESS_OFF = "power_off_unless_off"
+    AUTO_ON = "auto_on"
+    AUTO_OFF_UNLESS_FALSE = "auto_off_unless_false"
+    AUTO_OFF_ONLY_IF_TRUE = "auto_off_only_if_true"
+    SPEED = "speed"
+    DIRECTION = "direction"
+    SETPOINT = "setpoint"
+
+
+@dataclass(frozen=True)
+class WritePolicy:
+    """Gates run before steps. Step order is send order."""
+
+    steps: tuple[Step, ...]
+    requires_climate: bool = False
+    requires_direction: bool = False
+    phases: frozenset[ClimatePhase] | None = None
+    target_modes: frozenset[str | None] | None = None
+
+
+_ACTIVE = frozenset({ClimatePhase.COOL, ClimatePhase.FAN_ONLY})
+_COOL_TARGET = frozenset({None, ClimatePhase.COOL})
+
+_POLICY: dict[type[Intent], WritePolicy] = {
+    TurnOn: WritePolicy((Step.POWER_ON,)),
+    TurnOff: WritePolicy((Step.AUTO_OFF_ONLY_IF_TRUE, Step.POWER_OFF)),
+    SelectSpeed: WritePolicy((Step.POWER_ON_UNLESS_ON, Step.SPEED)),
+    SelectDirection: WritePolicy((Step.DIRECTION,), requires_direction=True),
+    SetHvacCool: WritePolicy(
+        (Step.POWER_ON, Step.AUTO_ON),
+        requires_climate=True,
+    ),
+    SetHvacOff: WritePolicy(
+        (Step.AUTO_OFF_ONLY_IF_TRUE, Step.POWER_OFF_UNLESS_OFF),
+        requires_climate=True,
+    ),
+    SetHvacFanOnly: WritePolicy(
+        (Step.AUTO_OFF_UNLESS_FALSE, Step.POWER_ON_UNLESS_ON),
+        requires_climate=True,
+    ),
+    SetClimateFanMode: WritePolicy(
+        (Step.POWER_ON_UNLESS_ON, Step.SPEED),
+        phases=_ACTIVE,
+    ),
+    SetTargetTemperature: WritePolicy(
+        (Step.POWER_ON, Step.AUTO_ON, Step.SETPOINT),
+        requires_climate=True,
+        target_modes=_COOL_TARGET,
+    ),
+}
+
+
 class CommandRejected(Exception):
     """The intent is invalid for this device. Nothing was sent."""
 
 
 def climate_intent(hvac_mode: str) -> Intent:
     """Return the climate intent for one HVAC mode string."""
-    if hvac_mode == "cool":
+    if hvac_mode == ClimatePhase.COOL:
         return SetHvacCool()
-    if hvac_mode == "fan_only":
+    if hvac_mode == ClimatePhase.FAN_ONLY:
         return SetHvacFanOnly()
-    if hvac_mode == "off":
+    if hvac_mode == ClimatePhase.OFF:
         return SetHvacOff()
     raise CommandRejected(f"Unsupported HVAC mode: {hvac_mode}")
 
 
 def plan(device: FanDevice, intent: Intent) -> tuple[FeatureWrite, ...]:
     """Return the absolute writes for one intent, in send order."""
-    match intent:
-        case TurnOn():
-            return (PowerWrite(True),)
-        case TurnOff():
-            return _power_off_writes(device)
-        case SelectSpeed(label):
-            return _speed_writes(device, label)
-        case SelectDirection(reverse):
-            direction = device.controls.direction
-            if direction is None:
-                raise CommandRejected("This fan does not support airflow direction")
-            binding = direction.exhaust_mode if reverse else direction.direct_mode
-            return (ModeWrite(binding.instance, binding.alexa_mode),)
-        case SetHvacCool():
-            return _cool_writes(device)
-        case SetHvacOff():
-            return _off_writes(device)
-        case SetHvacFanOnly():
-            return _fan_only_writes(device)
-        case SetClimateFanMode(label):
-            if climate_hvac_mode(device) not in ("cool", "fan_only"):
-                raise CommandRejected("Climate is off")
-            return _speed_writes(device, label)
-        case SetTargetTemperature(value, hvac_mode):
-            if hvac_mode not in (None, "cool"):
-                raise CommandRejected(
-                    f"Target temperature cannot be set while HVAC mode is {hvac_mode}"
-                )
-            return _target_writes(device, value)
-    raise CommandRejected(f"Unknown intent: {intent!r}")
+    policy = _POLICY.get(type(intent))
+    if policy is None:
+        raise CommandRejected(f"Unknown intent: {intent!r}")
+    _reject_unless_allowed(device, intent, policy)
+    return _assemble(device, intent, policy)
+
+
+def _reject_unless_allowed(
+    device: FanDevice, intent: Intent, policy: WritePolicy
+) -> None:
+    if policy.target_modes is not None and isinstance(intent, SetTargetTemperature):
+        if intent.hvac_mode not in policy.target_modes:
+            raise CommandRejected(
+                "Target temperature cannot be set while HVAC mode is "
+                f"{intent.hvac_mode}"
+            )
+    if policy.phases is not None and climate_phase(device) not in policy.phases:
+        raise CommandRejected("Climate is off")
+    if policy.requires_climate and device.controls.auto_climate is None:
+        raise CommandRejected("This fan has no auto climate")
+    if policy.requires_direction and device.controls.direction is None:
+        raise CommandRejected("This fan does not support airflow direction")
 
 
 def expected_states(writes: Iterable[FeatureWrite]) -> list[CapabilityState]:
@@ -238,71 +294,71 @@ def feature_request(endpoint_id: str, write: FeatureWrite) -> dict[str, Any]:
     raise TypeError(f"Unknown write: {write!r}")
 
 
-def _power_off_writes(device: FanDevice) -> tuple[FeatureWrite, ...]:
+def _assemble(
+    device: FanDevice, intent: Intent, policy: WritePolicy
+) -> tuple[FeatureWrite, ...]:
     writes: list[FeatureWrite] = []
+    for step in policy.steps:
+        write = _step_write(device, intent, step)
+        if write is not None:
+            writes.append(write)
+    return tuple(writes)
+
+
+def _step_write(
+    device: FanDevice, intent: Intent, step: Step
+) -> FeatureWrite | None:
     climate = device.controls.auto_climate
-    if climate is not None and device.auto_on is True:
-        writes.append(ToggleWrite(climate.toggle_instance, False))
-    writes.append(PowerWrite(False))
-    return tuple(writes)
-
-
-def _speed_writes(device: FanDevice, label: str) -> tuple[FeatureWrite, ...]:
-    binding = next(
-        (mode for mode in device.controls.speed_modes if mode.label == label),
-        None,
-    )
-    if binding is None:
-        raise CommandRejected(f"Invalid preset mode: {label}")
-    writes: list[FeatureWrite] = []
-    if device.power != "ON":
-        writes.append(PowerWrite(True))
-    writes.append(ModeWrite(binding.instance, binding.alexa_mode))
-    return tuple(writes)
-
-
-def _cool_writes(device: FanDevice) -> tuple[FeatureWrite, ...]:
-    climate = _require_climate(device)
-    return (PowerWrite(True), ToggleWrite(climate.toggle_instance, True))
-
-
-def _off_writes(device: FanDevice) -> tuple[FeatureWrite, ...]:
-    climate = _require_climate(device)
-    writes: list[FeatureWrite] = []
-    if device.auto_on is True:
-        writes.append(ToggleWrite(climate.toggle_instance, False))
-    if device.power != "OFF":
-        writes.append(PowerWrite(False))
-    return tuple(writes)
-
-
-def _fan_only_writes(device: FanDevice) -> tuple[FeatureWrite, ...]:
-    climate = _require_climate(device)
-    writes: list[FeatureWrite] = []
-    if device.auto_on is not False:
-        writes.append(ToggleWrite(climate.toggle_instance, False))
-    if device.power != "ON":
-        writes.append(PowerWrite(True))
-    return tuple(writes)
-
-
-def _target_writes(device: FanDevice, value: float) -> tuple[FeatureWrite, ...]:
-    climate = _require_climate(device)
-    number = _setpoint(value, climate.set_temperature_range)
-    if number is None:
-        raise CommandRejected(f"Invalid target temperature: {value}")
-    return (
-        PowerWrite(True),
-        ToggleWrite(climate.toggle_instance, True),
-        RangeWrite(climate.set_temperature_instance, number),
-    )
-
-
-def _require_climate(device: FanDevice) -> AutoClimateControls:
-    climate = device.controls.auto_climate
-    if climate is None:
-        raise CommandRejected("This fan has no auto climate")
-    return climate
+    match step:
+        case Step.POWER_ON:
+            return PowerWrite(True)
+        case Step.POWER_OFF:
+            return PowerWrite(False)
+        case Step.POWER_ON_UNLESS_ON if device.power != "ON":
+            return PowerWrite(True)
+        case Step.POWER_OFF_UNLESS_OFF if device.power != "OFF":
+            return PowerWrite(False)
+        case Step.AUTO_ON:
+            if climate is None:
+                raise CommandRejected("This fan has no auto climate")
+            return ToggleWrite(climate.toggle_instance, True)
+        case Step.AUTO_OFF_UNLESS_FALSE if device.auto_on is not False:
+            if climate is None:
+                raise CommandRejected("This fan has no auto climate")
+            return ToggleWrite(climate.toggle_instance, False)
+        case Step.AUTO_OFF_ONLY_IF_TRUE if (
+            device.auto_on is True and climate is not None
+        ):
+            return ToggleWrite(climate.toggle_instance, False)
+        case Step.SPEED if isinstance(intent, (SelectSpeed, SetClimateFanMode)):
+            binding = next(
+                (
+                    mode
+                    for mode in device.controls.speed_modes
+                    if mode.label == intent.label
+                ),
+                None,
+            )
+            if binding is None:
+                raise CommandRejected(f"Invalid preset mode: {intent.label}")
+            return ModeWrite(binding.instance, binding.alexa_mode)
+        case Step.DIRECTION if isinstance(intent, SelectDirection):
+            direction = device.controls.direction
+            if direction is None:
+                raise CommandRejected("This fan does not support airflow direction")
+            binding = (
+                direction.exhaust_mode if intent.reverse else direction.direct_mode
+            )
+            return ModeWrite(binding.instance, binding.alexa_mode)
+        case Step.SETPOINT if isinstance(intent, SetTargetTemperature):
+            if climate is None:
+                raise CommandRejected("This fan has no auto climate")
+            number = _setpoint(intent.value, climate.set_temperature_range)
+            if number is None:
+                raise CommandRejected(f"Invalid target temperature: {intent.value}")
+            return RangeWrite(climate.set_temperature_instance, number)
+        case _:
+            return None
 
 
 def quantize_setpoint(value: float, span: TemperatureRange) -> float | None:

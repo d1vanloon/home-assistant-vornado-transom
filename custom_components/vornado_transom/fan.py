@@ -15,7 +15,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .alexa.commands import SelectDirection, SelectSpeed, TurnOff, TurnOn
-from .alexa.endpoints import entity_contract
+from .alexa.endpoints import entity_contract, speed_label
 from .coordinator import VornadoTransomConfigEntry, VornadoTransomCoordinator
 from .entity import VornadoTransomEntity
 
@@ -70,12 +70,7 @@ class VornadoTransomFan(VornadoTransomEntity, FanEntity):
     @property
     def preset_mode(self) -> str | None:
         """Return the current speed preset label."""
-        if not self.device.speed_mode:
-            return None
-        for binding in self.device.controls.speed_modes:
-            if binding.alexa_mode == self.device.speed_mode:
-                return binding.label
-        return None
+        return speed_label(self.device)
 
     @property
     def current_direction(self) -> str | None:
