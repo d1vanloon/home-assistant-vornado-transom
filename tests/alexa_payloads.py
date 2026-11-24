@@ -78,7 +78,79 @@ def oscillation_position_capability(*, mode_count: int = 8) -> dict:
     }
 
 
-def capabilities(*, speed_modes: int = 4, include_direction: bool = True) -> list[dict]:
+def auto_toggle_capability(
+    name: str = "Auto", *, instance: str = "4", read_only: bool = False
+) -> dict:
+    return {
+        "interfaceName": "Alexa.ToggleController",
+        "instance": instance,
+        "properties": {"readOnly": read_only},
+        "resources": {
+            "friendlyNames": [
+                {"@type": "text", "value": {"text": name}},
+            ]
+        },
+    }
+
+
+def range_capability(
+    *,
+    instance: str,
+    name: str,
+    minimum: float,
+    maximum: float,
+    precision: float,
+    read_only: bool = False,
+) -> dict:
+    return {
+        "interfaceName": "Alexa.RangeController",
+        "instance": instance,
+        "properties": {"readOnly": read_only},
+        "resources": {
+            "friendlyNames": [
+                {"@type": "text", "value": {"text": name}},
+            ]
+        },
+        "configuration": {
+            "supportedRange": {
+                "minimumValue": minimum,
+                "maximumValue": maximum,
+                "precision": precision,
+            }
+        },
+    }
+
+
+def set_temperature_capability(**overrides: Any) -> dict:
+    values: dict[str, Any] = {
+        "instance": "3",
+        "name": "Set Temperature",
+        "minimum": 60.0,
+        "maximum": 90.0,
+        "precision": 1.0,
+        "read_only": False,
+    }
+    values.update(overrides)
+    return range_capability(**values)
+
+
+def air_temperature_capability(*, read_only: bool = True) -> dict:
+    return range_capability(
+        instance="5",
+        name="Air Temperature",
+        minimum=0.0,
+        maximum=100.0,
+        precision=1.0,
+        read_only=read_only,
+    )
+
+
+def capabilities(
+    *,
+    speed_modes: int = 4,
+    include_direction: bool = True,
+    include_auto_climate: bool = False,
+) -> list[dict]:
     result = [
         {
             "interfaceName": "Alexa.PowerController",
@@ -88,6 +160,9 @@ def capabilities(*, speed_modes: int = 4, include_direction: bool = True) -> lis
     ]
     if include_direction:
         result.append(direction_capability())
+    if include_auto_climate:
+        result.append(set_temperature_capability())
+        result.append(auto_toggle_capability())
     return result
 
 

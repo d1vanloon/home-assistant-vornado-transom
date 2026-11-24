@@ -114,7 +114,7 @@ class AlexaSmartHomeClient:
         return [item for item in items if isinstance(item, dict)]
 
     async def async_get_fan_state(self, endpoint_id: str) -> list[CapabilityState]:
-        """Fetch power/mode/range state for a fan endpoint."""
+        """Fetch power, mode, range, and toggle state for a fan endpoint."""
         data = await self._graphql(QUERY_FAN_STATE, {"endpointId": endpoint_id})
         endpoint = data.get("endpoint") or {}
         features = endpoint.get("features") or []
@@ -125,6 +125,7 @@ class AlexaSmartHomeClient:
             power_state: str | None = None
             mode_value: str | None = None
             range_value: float | None = None
+            toggle_enabled: bool | None = None
             for prop in feature.get("properties") or []:
                 if not isinstance(prop, dict):
                     continue
@@ -136,6 +137,8 @@ class AlexaSmartHomeClient:
                 range_obj = prop.get("rangeValue") or {}
                 if isinstance(range_obj, dict) and range_obj.get("value") is not None:
                     range_value = float(range_obj["value"])
+                if "toggleStateValue" in prop and prop["toggleStateValue"] is not None:
+                    toggle_enabled = _toggle_enabled(prop["toggleStateValue"])
             states.append(
                 CapabilityState(
                     name=str(feature.get("name") or ""),
@@ -143,11 +146,12 @@ class AlexaSmartHomeClient:
                     power_state=power_state,
                     mode_value=mode_value,
                     range_value=range_value,
+                    toggle_enabled=toggle_enabled,
                 )
             )
         return states
 
-    async def _async_set_endpoint_feature(self, request: dict[str, Any]) -> None:
+    async def async_set_endpoint_feature(self, request: dict[str, Any]) -> None:
         """Execute setEndpointFeatures and raise on Amazon errors."""
         data = await self._graphql(
             MUTATION_SET_ENDPOINT_FEATURES,
@@ -163,27 +167,11 @@ class AlexaSmartHomeClient:
                 code=code,
             )
 
-    async def async_set_power(self, endpoint_id: str, turn_on: bool) -> None:
-        """Turn a fan endpoint on or off."""
-        await self._async_set_endpoint_feature(
-            {
-                "endpointId": endpoint_id,
-                "featureName": "power",
-                "featureOperationName": "turnOn" if turn_on else "turnOff",
-                "payload": {},
-            }
-        )
 
-    async def async_set_mode(
-        self, endpoint_id: str, instance: str, mode: str
-    ) -> None:
-        """Set a ModeController value on a fan endpoint."""
-        await self._async_set_endpoint_feature(
-            {
-                "endpointId": endpoint_id,
-                "featureName": "mode",
-                "featureOperationName": "setMode",
-                "instance": instance,
-                "payload": {"mode": mode},
-            }
-        )
+def _toggle_enabled(value: Any) -> bool | None:
+    """Map a Nexus toggleStateValue. Only ON and OFF are states."""
+    if value == "ON":
+        return True
+    if value == "OFF":
+        return False
+    return None

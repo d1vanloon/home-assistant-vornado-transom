@@ -1,0 +1,360 @@
+"""Intents, the writes they produce, and the Nexus request for each write."""
+
+from __future__ import annotations
+
+import math
+from collections.abc import Iterable
+from dataclasses import dataclass
+from typing import Any
+
+from .endpoints import climate_hvac_mode
+from .models import (
+    AutoClimateControls,
+    CapabilityState,
+    FanDevice,
+    TemperatureRange,
+)
+
+# Inferred. SetRangeValue's payload key matches the polled rangeValue property;
+# this mutation was not captured on a Transom.
+RANGE_PAYLOAD_KEY = "rangeValue"
+
+
+@dataclass(frozen=True)
+class TurnOn:
+    """Turn fan power on. Does not change the auto toggle."""
+
+
+@dataclass(frozen=True)
+class TurnOff:
+    """Turn fan power off. Clears auto when it is on, so climate leaves cool."""
+
+
+@dataclass(frozen=True)
+class SelectSpeed:
+    """Select a discovered speed label. Turns power on when it is not already on."""
+
+    label: str
+
+
+@dataclass(frozen=True)
+class SelectDirection:
+    """Set airflow direction. False is forward (direct); True is reverse (exhaust)."""
+
+    reverse: bool
+
+
+@dataclass(frozen=True)
+class SetHvacCool:
+    """Turn power on and enable auto."""
+
+
+@dataclass(frozen=True)
+class SetHvacOff:
+    """Turn power off, and turn auto off when it is on."""
+
+
+@dataclass(frozen=True)
+class SetHvacFanOnly:
+    """Turn auto off and leave the fan powered on."""
+
+
+@dataclass(frozen=True)
+class SetClimateFanMode:
+    """Select a speed label while cool or fan only is active."""
+
+    label: str
+
+
+@dataclass(frozen=True)
+class SetTargetTemperature:
+    """Set the auto-mode target temperature.
+
+    hvac_mode is set when the climate service sent one. None and cool keep the
+    temperature-only behavior, which turns auto on. Any other mode is rejected
+    before a write.
+    """
+
+    value: float
+    hvac_mode: str | None = None
+
+
+type Intent = (
+    TurnOn
+    | TurnOff
+    | SelectSpeed
+    | SelectDirection
+    | SetHvacCool
+    | SetHvacOff
+    | SetHvacFanOnly
+    | SetClimateFanMode
+    | SetTargetTemperature
+)
+
+
+@dataclass(frozen=True)
+class PowerWrite:
+    """Absolute power. No instance."""
+
+    on: bool
+
+
+@dataclass(frozen=True)
+class ModeWrite:
+    """Absolute ModeController value."""
+
+    instance: str
+    mode: str
+
+
+@dataclass(frozen=True)
+class ToggleWrite:
+    """Absolute ToggleController value."""
+
+    instance: str
+    on: bool
+
+
+@dataclass(frozen=True)
+class RangeWrite:
+    """Absolute RangeController value. Not snapped."""
+
+    instance: str
+    value: float
+
+
+type FeatureWrite = PowerWrite | ModeWrite | ToggleWrite | RangeWrite
+
+
+class CommandRejected(Exception):
+    """The intent is invalid for this device. Nothing was sent."""
+
+
+def climate_intent(hvac_mode: str) -> Intent:
+    """Return the climate intent for one HVAC mode string."""
+    if hvac_mode == "cool":
+        return SetHvacCool()
+    if hvac_mode == "fan_only":
+        return SetHvacFanOnly()
+    if hvac_mode == "off":
+        return SetHvacOff()
+    raise CommandRejected(f"Unsupported HVAC mode: {hvac_mode}")
+
+
+def plan(device: FanDevice, intent: Intent) -> tuple[FeatureWrite, ...]:
+    """Return the absolute writes for one intent, in send order."""
+    match intent:
+        case TurnOn():
+            return (PowerWrite(True),)
+        case TurnOff():
+            return _power_off_writes(device)
+        case SelectSpeed(label):
+            return _speed_writes(device, label)
+        case SelectDirection(reverse):
+            direction = device.controls.direction
+            if direction is None:
+                raise CommandRejected("This fan does not support airflow direction")
+            binding = direction.exhaust_mode if reverse else direction.direct_mode
+            return (ModeWrite(binding.instance, binding.alexa_mode),)
+        case SetHvacCool():
+            return _cool_writes(device)
+        case SetHvacOff():
+            return _off_writes(device)
+        case SetHvacFanOnly():
+            return _fan_only_writes(device)
+        case SetClimateFanMode(label):
+            if climate_hvac_mode(device) not in ("cool", "fan_only"):
+                raise CommandRejected("Climate is off")
+            return _speed_writes(device, label)
+        case SetTargetTemperature(value, hvac_mode):
+            if hvac_mode not in (None, "cool"):
+                raise CommandRejected(
+                    f"Target temperature cannot be set while HVAC mode is {hvac_mode}"
+                )
+            return _target_writes(device, value)
+    raise CommandRejected(f"Unknown intent: {intent!r}")
+
+
+def expected_states(writes: Iterable[FeatureWrite]) -> list[CapabilityState]:
+    """Each write as the polled feature apply_fan_state should fold."""
+    states: list[CapabilityState] = []
+    for write in writes:
+        match write:
+            case PowerWrite(on):
+                states.append(
+                    CapabilityState(name="power", power_state="ON" if on else "OFF")
+                )
+            case ModeWrite(instance, mode):
+                states.append(
+                    CapabilityState(name="mode", instance=instance, mode_value=mode)
+                )
+            case ToggleWrite(instance, on):
+                states.append(
+                    CapabilityState(
+                        name="toggle", instance=instance, toggle_enabled=on
+                    )
+                )
+            case RangeWrite(instance, value):
+                states.append(
+                    CapabilityState(name="range", instance=instance, range_value=value)
+                )
+    return states
+
+
+def feature_request(endpoint_id: str, write: FeatureWrite) -> dict[str, Any]:
+    """Build one setEndpointFeatures request. The only Nexus request builder."""
+    match write:
+        case PowerWrite(on):
+            return {
+                "endpointId": endpoint_id,
+                "featureName": "power",
+                "featureOperationName": "turnOn" if on else "turnOff",
+                "payload": {},
+            }
+        case ModeWrite(instance, mode):
+            return {
+                "endpointId": endpoint_id,
+                "featureName": "mode",
+                "featureOperationName": "setMode",
+                "instance": instance,
+                "payload": {"mode": mode},
+            }
+        case ToggleWrite(instance, on):
+            return {
+                "endpointId": endpoint_id,
+                "featureName": "toggle",
+                "featureOperationName": "turnOn" if on else "turnOff",
+                "instance": instance,
+                "payload": {},
+            }
+        case RangeWrite(instance, value):
+            return {
+                "endpointId": endpoint_id,
+                "featureName": "range",
+                "featureOperationName": "setRangeValue",
+                "instance": instance,
+                "payload": {RANGE_PAYLOAD_KEY: value},
+            }
+    raise TypeError(f"Unknown write: {write!r}")
+
+
+def _power_off_writes(device: FanDevice) -> tuple[FeatureWrite, ...]:
+    writes: list[FeatureWrite] = []
+    climate = device.controls.auto_climate
+    if climate is not None and device.auto_on is True:
+        writes.append(ToggleWrite(climate.toggle_instance, False))
+    writes.append(PowerWrite(False))
+    return tuple(writes)
+
+
+def _speed_writes(device: FanDevice, label: str) -> tuple[FeatureWrite, ...]:
+    binding = next(
+        (mode for mode in device.controls.speed_modes if mode.label == label),
+        None,
+    )
+    if binding is None:
+        raise CommandRejected(f"Invalid preset mode: {label}")
+    writes: list[FeatureWrite] = []
+    if device.power != "ON":
+        writes.append(PowerWrite(True))
+    writes.append(ModeWrite(binding.instance, binding.alexa_mode))
+    return tuple(writes)
+
+
+def _cool_writes(device: FanDevice) -> tuple[FeatureWrite, ...]:
+    climate = _require_climate(device)
+    return (PowerWrite(True), ToggleWrite(climate.toggle_instance, True))
+
+
+def _off_writes(device: FanDevice) -> tuple[FeatureWrite, ...]:
+    climate = _require_climate(device)
+    writes: list[FeatureWrite] = []
+    if device.auto_on is True:
+        writes.append(ToggleWrite(climate.toggle_instance, False))
+    if device.power != "OFF":
+        writes.append(PowerWrite(False))
+    return tuple(writes)
+
+
+def _fan_only_writes(device: FanDevice) -> tuple[FeatureWrite, ...]:
+    climate = _require_climate(device)
+    writes: list[FeatureWrite] = []
+    if device.auto_on is not False:
+        writes.append(ToggleWrite(climate.toggle_instance, False))
+    if device.power != "ON":
+        writes.append(PowerWrite(True))
+    return tuple(writes)
+
+
+def _target_writes(device: FanDevice, value: float) -> tuple[FeatureWrite, ...]:
+    climate = _require_climate(device)
+    number = _setpoint(value, climate.set_temperature_range)
+    if number is None:
+        raise CommandRejected(f"Invalid target temperature: {value}")
+    return (
+        PowerWrite(True),
+        ToggleWrite(climate.toggle_instance, True),
+        RangeWrite(climate.set_temperature_instance, number),
+    )
+
+
+def _require_climate(device: FanDevice) -> AutoClimateControls:
+    climate = device.controls.auto_climate
+    if climate is None:
+        raise CommandRejected("This fan has no auto climate")
+    return climate
+
+
+def quantize_setpoint(value: float, span: TemperatureRange) -> float | None:
+    """Nearest in-range grid point for a climate target.
+
+    Home Assistant converts Celsius to Fahrenheit without rounding, so 22°C
+    arrives as 71.6. A value already on the grid is unchanged. A value outside
+    the range, or exactly halfway between steps, stays invalid.
+    """
+    exact = _setpoint(value, span)
+    if exact is not None:
+        return exact
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    if not (
+        math.isfinite(span.minimum)
+        and math.isfinite(span.maximum)
+        and math.isfinite(span.precision)
+        and span.precision > 0
+    ):
+        return None
+    if number < span.minimum or number > span.maximum:
+        return None
+    steps = (number - span.minimum) / span.precision
+    nearest = round(steps)
+    if abs(steps - nearest) >= 0.5 - 1e-9:
+        return None
+    return _setpoint(span.minimum + nearest * span.precision, span)
+
+
+def _setpoint(value: float, span: TemperatureRange) -> float | None:
+    """Return value when it sits on the discovered grid, otherwise None."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    if not (
+        math.isfinite(span.minimum)
+        and math.isfinite(span.maximum)
+        and math.isfinite(span.precision)
+        and span.precision > 0
+    ):
+        return None
+    if number < span.minimum or number > span.maximum:
+        return None
+    steps = (number - span.minimum) / span.precision
+    if abs(steps - round(steps)) > 1e-6:
+        return None
+    return number

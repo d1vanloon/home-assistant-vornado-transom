@@ -14,6 +14,7 @@ The fans are exposed through Amazon's Alexa Smart Home service, so this integrat
   - **Preset modes** for the fan's speed levels (discovered automatically per device).
   - **Direction** control — `forward` (direct airflow) and `reverse` (exhaust) — when a Transom-style 2-mode Direct/Exhaust controller is present.
   - An **air temperature** sensor when the fan exposes that reading.
+- An optional `climate` entity named **Auto climate**, with HVAC off, cool, and fan only, a target temperature, and the same discovered speed labels as fan modes. Cool is the fan's auto thermostat. Fan only is the fan running with auto off. Off turns the fan off. The action is fan while device power is on and off while power is off. The device exposes power, not a separate running flag. The entity appears only when the device has both the auto toggle and the set-temperature range. The card shows the current speed, and accepts a new speed, in cool and in fan only. Turning the fan entity off also turns the climate entity off, without waiting for the next poll. The fan entity remains the manual on/off, speed, and direction control.
 - Automatic re-authentication flow when your Amazon session expires.
 - Polls the cloud every 60 seconds for state updates.
 
