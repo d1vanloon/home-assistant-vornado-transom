@@ -15,7 +15,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
   actions: write
 
 concurrency:
@@ -29,7 +28,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           ref: master
 
       - name: Set up Python
@@ -43,4 +42,3 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_ACTOR_ID: ${{ github.actor_id }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
