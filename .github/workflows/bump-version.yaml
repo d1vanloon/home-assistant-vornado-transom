@@ -38,10 +38,9 @@ jobs:
           python-version: "3.12"
 
       - name: Bump version
-        run: python -m tools.version_bump --part "${{ inputs.part }}"
+        run: python tools/bump_version.py --part "${{ inputs.part }}"
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_ACTOR_ID: ${{ github.actor_id }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          BUMP_RUN_ID: ${{ github.run_id }}
