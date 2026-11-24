@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
 
 permissions: {}
 
@@ -49,6 +50,7 @@ jobs:
     name: Create GitHub release
     runs-on: ubuntu-latest
     needs: [tests, validate-hacs, validate-hassfest]
+    if: github.ref_type == 'tag'
     permissions:
       contents: write
     steps:
