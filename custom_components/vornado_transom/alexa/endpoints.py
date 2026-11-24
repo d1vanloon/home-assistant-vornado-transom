@@ -272,14 +272,6 @@ def climate_hvac_action(device: FanDevice) -> str | None:
 
 
 @dataclass(frozen=True)
-class DirectionModes:
-    """Alexa mode values for forward and reverse airflow."""
-
-    direct: str
-    exhaust: str
-
-
-@dataclass(frozen=True)
 class EntityContract:
     """What Home Assistant shows for a kept fan, before any polling."""
 
@@ -287,23 +279,13 @@ class EntityContract:
     manufacturer: str
     model: str
     preset_modes: tuple[str, ...]
-    direction_modes: DirectionModes | None
 
 
 def entity_contract(device: FanDevice) -> EntityContract:
     """Project a FanDevice onto the Home Assistant entity and device facts."""
-    direction = device.controls.direction
     return EntityContract(
         unique_id=f"{device.appliance_key}_fan",
         manufacturer=device.manufacturer or MANUFACTURER,
         model=device.model or DEFAULT_MODEL,
         preset_modes=tuple(mode.label for mode in device.controls.speed_modes),
-        direction_modes=(
-            None
-            if direction is None
-            else DirectionModes(
-                direction.direct_mode.alexa_mode,
-                direction.exhaust_mode.alexa_mode,
-            )
-        ),
     )

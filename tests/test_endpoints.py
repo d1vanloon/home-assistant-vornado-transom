@@ -161,9 +161,6 @@ def test_entity_contract_falls_back_to_vornado_transom() -> None:
     assert contract.model == "Transom"
     assert contract.unique_id == "abc123_fan"
     assert contract.preset_modes == ("Low", "Medium", "High", "Turbo")
-    assert contract.direction_modes == endpoints.DirectionModes(
-        "Direction.Direct", "Direction.Exhaust"
-    )
 
 
 def test_recorded_transom_matches_live_bindings() -> None:
