@@ -302,6 +302,29 @@ def test_fan_power_writes_do_not_touch_auto() -> None:
     assert commands.plan(device, commands.TurnOn()) == (commands.PowerWrite(True),)
 
 
+def test_fan_off_while_cool_publishes_climate_off_immediately() -> None:
+    """The fan switch must leave the climate card off before the next poll."""
+    device = _device(power="ON", auto_on=True)
+    published: list = []
+
+    async def send(write: object) -> None:
+        return None
+
+    asyncio.run(
+        execution.CommandGate().run(
+            "abc123",
+            lambda: device,
+            commands.TurnOff(),
+            send,
+            published.append,
+        )
+    )
+    assert len(published) == 1
+    assert published[0].power == "OFF"
+    assert published[0].auto_on is False
+    assert endpoints.climate_hvac_mode(published[0]) == "off"
+
+
 def test_empty_climate_off_does_not_publish() -> None:
     """An Off plan with nothing to send must not mark the fan available."""
     device = _device(auto_on=None)
