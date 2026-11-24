@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from tools.version_bump.__main__ import gh_argv, gh_repo_env
 from tools.version_bump.bump import (
     MANIFEST_PATH,
     CreateTag,
@@ -165,6 +166,21 @@ def test_open_pull_request_for_the_target_merges() -> None:
     assert decision.expected_head_sha == "headsha"
     assert decision.target == target
     assert decision.commit_message == commit_message(target)
+
+
+def test_gh_api_command_does_not_pass_repo_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_REPOSITORY", "d1vanloon/home-assistant-vornado-transom")
+    argv = gh_argv(
+        [
+            "api",
+            "--method",
+            "PUT",
+            "repos/d1vanloon/home-assistant-vornado-transom/pulls/1/merge",
+        ]
+    )
+    assert argv[0] == "gh"
+    assert "--repo" not in argv
+    assert gh_repo_env() == {"GH_REPO": "d1vanloon/home-assistant-vornado-transom"}
 
 
 def test_introduce_sha_missing_is_refused() -> None:
