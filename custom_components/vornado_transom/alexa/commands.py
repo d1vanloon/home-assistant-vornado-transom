@@ -27,7 +27,7 @@ class TurnOn:
 
 @dataclass(frozen=True)
 class TurnOff:
-    """Turn fan power off. Does not change the auto toggle."""
+    """Turn fan power off. Clears auto when it is on, so climate leaves cool."""
 
 
 @dataclass(frozen=True)
@@ -147,7 +147,7 @@ def plan(device: FanDevice, intent: Intent) -> tuple[FeatureWrite, ...]:
         case TurnOn():
             return (PowerWrite(True),)
         case TurnOff():
-            return (PowerWrite(False),)
+            return _power_off_writes(device)
         case SelectSpeed(label):
             return _speed_writes(device, label)
         case SelectDirection(reverse):
@@ -236,6 +236,15 @@ def feature_request(endpoint_id: str, write: FeatureWrite) -> dict[str, Any]:
                 "payload": {RANGE_PAYLOAD_KEY: value},
             }
     raise TypeError(f"Unknown write: {write!r}")
+
+
+def _power_off_writes(device: FanDevice) -> tuple[FeatureWrite, ...]:
+    writes: list[FeatureWrite] = []
+    climate = device.controls.auto_climate
+    if climate is not None and device.auto_on is True:
+        writes.append(ToggleWrite(climate.toggle_instance, False))
+    writes.append(PowerWrite(False))
+    return tuple(writes)
 
 
 def _speed_writes(device: FanDevice, label: str) -> tuple[FeatureWrite, ...]:

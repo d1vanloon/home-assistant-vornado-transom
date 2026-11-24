@@ -296,9 +296,27 @@ def test_fan_preset_while_off_turns_power_on_then_sets_speed() -> None:
     )
 
 
-def test_fan_power_writes_do_not_touch_auto() -> None:
+def test_fan_off_while_cool_clears_auto_before_power() -> None:
     device = _device(power="ON", auto_on=True)
-    assert commands.plan(device, commands.TurnOff()) == (commands.PowerWrite(False),)
+    assert commands.plan(device, commands.TurnOff()) == (
+        commands.ToggleWrite("4", False),
+        commands.PowerWrite(False),
+    )
+
+
+def test_fan_off_without_cool_only_cuts_power() -> None:
+    fan_only = _device(power="ON", auto_on=False)
+    assert commands.plan(fan_only, commands.TurnOff()) == (commands.PowerWrite(False),)
+    unknown = _device(power="ON", auto_on=None)
+    assert commands.plan(unknown, commands.TurnOff()) == (commands.PowerWrite(False),)
+    no_climate = _device(power="ON", auto_on=True, climate=False)
+    assert commands.plan(no_climate, commands.TurnOff()) == (
+        commands.PowerWrite(False),
+    )
+
+
+def test_fan_on_does_not_touch_auto() -> None:
+    device = _device(power="OFF", auto_on=False)
     assert commands.plan(device, commands.TurnOn()) == (commands.PowerWrite(True),)
 
 
